@@ -37,6 +37,67 @@ export type NodeInsert = {
 
 export type NodeUpdate = Partial<Omit<NodeInsert, 'user_id'>>;
 
+export type EvolutionStatus = 'running' | 'completed' | 'failed';
+export type EvolutionAction = 'merge' | 'complement' | 'correct' | 'skip';
+
+export type EvolutionRunRow = {
+  id: string;
+  user_id: string;
+  started_at: string;
+  finished_at: string | null;
+  status: EvolutionStatus;
+  nodes_examined: number;
+  clusters_found: number;
+  actions_count: number;
+  summary: string | null;
+  error: string | null;
+};
+
+export type EvolutionRunInsert = {
+  id?: string;
+  user_id: string;
+  started_at?: string;
+  finished_at?: string | null;
+  status?: EvolutionStatus;
+  nodes_examined?: number;
+  clusters_found?: number;
+  actions_count?: number;
+  summary?: string | null;
+  error?: string | null;
+};
+
+export type EvolutionRunUpdate = Partial<Omit<EvolutionRunInsert, 'user_id'>>;
+
+export type EvolutionActionRow = {
+  id: string;
+  run_id: string;
+  user_id: string;
+  action: EvolutionAction;
+  target_node_id: string;
+  source_node_ids: string[];
+  reasoning: string | null;
+  suggested_content: string | null;
+  applied_at: string | null;
+  created_at: string;
+};
+
+export type EvolutionActionInsert = {
+  id?: string;
+  run_id: string;
+  user_id: string;
+  action: EvolutionAction;
+  target_node_id: string;
+  source_node_ids?: string[];
+  reasoning?: string | null;
+  suggested_content?: string | null;
+  applied_at?: string | null;
+  created_at?: string;
+};
+
+export type EvolutionActionUpdate = Partial<
+  Omit<EvolutionActionInsert, 'run_id' | 'user_id' | 'target_node_id'>
+>;
+
 export type Database = {
   public: {
     Tables: {
@@ -44,6 +105,18 @@ export type Database = {
         Row: NodeRow;
         Insert: NodeInsert;
         Update: NodeUpdate;
+        Relationships: [];
+      };
+      evolution_runs: {
+        Row: EvolutionRunRow;
+        Insert: EvolutionRunInsert;
+        Update: EvolutionRunUpdate;
+        Relationships: [];
+      };
+      evolution_actions: {
+        Row: EvolutionActionRow;
+        Insert: EvolutionActionInsert;
+        Update: EvolutionActionUpdate;
         Relationships: [];
       };
     };

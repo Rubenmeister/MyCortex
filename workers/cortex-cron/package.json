@@ -5,16 +5,18 @@
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx --env-file=.env src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "node --env-file=.env dist/index.js",
     "lint": "eslint .",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@mycortex/ai-core": "workspace:*",
+    "@mycortex/cortex-engine": "workspace:*",
     "@mycortex/db": "workspace:*",
-    "@mycortex/shared-types": "workspace:*"
+    "@mycortex/shared-types": "workspace:*",
+    "zod": "^3.24.0"
   },
   "devDependencies": {
     "@mycortex/config-eslint": "workspace:*",
