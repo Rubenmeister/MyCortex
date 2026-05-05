@@ -15,8 +15,8 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "incremental": true,
-    "declaration": true,
-    "declarationMap": true,
+    "declaration": false,
+    "declarationMap": false,
     "sourceMap": true
   },
   "exclude": ["node_modules", "dist", "build", ".next", ".turbo"]
