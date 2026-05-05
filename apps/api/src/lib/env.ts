@@ -14,6 +14,7 @@ const EnvSchema = z.object({
 
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
+  SUPABASE_ANON_KEY: z.string().min(1),
 
   OPENAI_API_KEY: optKey,
   ANTHROPIC_API_KEY: optKey,

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 
 export const IngestRequestSchema = z.object({
-  userId: z.string().uuid(),
   source: z.enum(['telegram', 'mobile', 'web', 'api']),
   text: z.string().trim().min(1).optional(),
   audioUrl: z.string().url().optional(),
