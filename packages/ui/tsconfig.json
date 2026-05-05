@@ -1,0 +1,4 @@
+{
+  "extends": "@mycortex/config-tsconfig/react-library.json",
+  "include": ["src/**/*"]
+}

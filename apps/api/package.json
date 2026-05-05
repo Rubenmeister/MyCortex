@@ -1,0 +1,32 @@
+{
+  "name": "@mycortex/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.0",
+    "@fastify/sensible": "^6.0.0",
+    "@mycortex/ai-core": "workspace:*",
+    "@mycortex/db": "workspace:*",
+    "@mycortex/shared-types": "workspace:*",
+    "fastify": "^5.2.0",
+    "fastify-plugin": "^5.0.1",
+    "pino-pretty": "^13.0.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@mycortex/config-eslint": "workspace:*",
+    "@mycortex/config-tsconfig": "workspace:*",
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
