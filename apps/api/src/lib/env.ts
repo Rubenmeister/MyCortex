@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+// Treat empty strings (common when .env keys are placeholder-empty) as missing.
+const optKey = z.preprocess(
+  (v) => (typeof v === 'string' && v.trim() === '' ? undefined : v),
+  z.string().min(1).optional(),
+);
+
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   PORT: z.coerce.number().int().positive().default(4000),
@@ -9,10 +15,10 @@ const EnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
 
-  OPENAI_API_KEY: z.string().min(1).optional(),
-  ANTHROPIC_API_KEY: z.string().min(1).optional(),
-  GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1).optional(),
-  TAVILY_API_KEY: z.string().min(1).optional(),
+  OPENAI_API_KEY: optKey,
+  ANTHROPIC_API_KEY: optKey,
+  GOOGLE_GENERATIVE_AI_API_KEY: optKey,
+  TAVILY_API_KEY: optKey,
 });
 
 export type Env = z.infer<typeof EnvSchema>;
