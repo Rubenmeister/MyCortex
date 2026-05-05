@@ -4,13 +4,15 @@ import sensible from '@fastify/sensible';
 import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
 import { cortexModule } from './modules/cortex/index.js';
+import { getEnv } from './lib/env.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
+  const env = getEnv();
   const server = Fastify({
     logger: {
-      level: process.env.LOG_LEVEL ?? 'info',
+      level: env.LOG_LEVEL,
       transport:
-        process.env.NODE_ENV !== 'production'
+        env.NODE_ENV !== 'production'
           ? { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } }
           : undefined,
     },
