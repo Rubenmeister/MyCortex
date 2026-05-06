@@ -7,7 +7,11 @@ export type Neighbor = {
   similarity: number;
 };
 
-const DEFAULT_THRESHOLD = 0.7;
+// 0.4 is calibrated for OpenAI text-embedding-3-small. Lower than the 0.7
+// you'd use with ada-002 — the newer model produces lower absolute cosine
+// similarities for semantically equivalent content. Verified empirically:
+// related notes score 0.45–0.60, unrelated < 0.25.
+const DEFAULT_THRESHOLD = 0.4;
 const DEFAULT_TOP_K = 5;
 
 /**

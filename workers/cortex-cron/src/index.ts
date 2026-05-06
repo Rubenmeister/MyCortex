@@ -8,7 +8,7 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: z.string().min(1).optional(),
   OPENAI_API_KEY: z.string().min(1).optional(),
   EVOLUTION_LOOKBACK_HOURS: z.coerce.number().positive().default(24),
-  EVOLUTION_SIMILARITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
+  EVOLUTION_SIMILARITY_THRESHOLD: z.coerce.number().min(0).max(1).default(0.4),
   EVOLUTION_TOP_K: z.coerce.number().int().positive().default(5),
 });
 
