@@ -5,8 +5,8 @@ import { embed } from 'ai';
 
 export const models = {
   classifier: openai('gpt-4o-mini'),
-  reasoner: anthropic('claude-3-5-sonnet-latest'),
-  fallback: google('gemini-1.5-pro-latest'),
+  reasoner: anthropic('claude-sonnet-4-6'),
+  fallback: google('gemini-2.5-pro'),
 } as const;
 
 export type ModelKey = keyof typeof models;

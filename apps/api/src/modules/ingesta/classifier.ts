@@ -23,7 +23,17 @@ export async function classify(text: string | undefined): Promise<Classification
       prompt: text,
     });
     return object;
-  } catch {
+  } catch (err) {
+    // Surface the failure instead of swallowing it. The route still gets a
+    // safe fallback so ingesta never blocks, but we log enough to diagnose
+    // quota / model / network issues.
+    console.warn(
+      JSON.stringify({
+        level: 'warn',
+        msg: 'classifier_fallback',
+        reason: String(err).slice(0, 300),
+      }),
+    );
     return FALLBACK;
   }
 }
