@@ -10,6 +10,16 @@ export const IngestRequestSchema = z.object({
   message: 'At least one of text/audioUrl/imageUrl is required',
 });
 
+export const IngestAudioRequestSchema = z.object({
+  source: z.enum(['telegram', 'mobile', 'web', 'api']),
+  audioBase64: z.string().min(100, 'audio payload too small'),
+  mimeType: z.string().regex(/^audio\//, 'mimeType must start with audio/'),
+  language: z.string().length(2).optional(),
+  title: z.string().trim().min(1).optional(),
+});
+
+export type IngestAudioRequest = z.infer<typeof IngestAudioRequestSchema>;
+
 export type IngestRequest = z.infer<typeof IngestRequestSchema>;
 
 export const ClassificationSchema = z.object({

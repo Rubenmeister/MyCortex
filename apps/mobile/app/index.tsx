@@ -1,18 +1,15 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import { Redirect } from 'expo-router';
+import { ActivityIndicator, View } from 'react-native';
+import { useAuth } from '../src/lib/auth.js';
 
-export default function HomeScreen() {
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>MyCortex</Text>
-      <Text style={styles.subtitle}>Your AI second brain.</Text>
-      <StatusBar style="auto" />
-    </View>
-  );
+export default function Gate() {
+  const { session, loading } = useAuth();
+  if (loading) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  }
+  return session ? <Redirect href="/(tabs)" /> : <Redirect href="/(auth)/login" />;
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 },
-  title: { fontSize: 32, fontWeight: '700' },
-  subtitle: { fontSize: 16, color: '#666' },
-});

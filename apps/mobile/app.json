@@ -9,12 +9,25 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.mycortex.app"
+      "bundleIdentifier": "com.mycortex.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "MyCortex usa el micrófono para capturar tus notas de voz."
+      }
     },
     "android": {
-      "package": "com.mycortex.app"
+      "package": "com.mycortex.app",
+      "permissions": ["RECORD_AUDIO"]
     },
-    "plugins": ["expo-router"],
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-av",
+        {
+          "microphonePermission": "MyCortex usa el micrófono para capturar tus notas de voz."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     }

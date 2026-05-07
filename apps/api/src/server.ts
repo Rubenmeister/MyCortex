@@ -16,6 +16,8 @@ export async function buildServer(): Promise<FastifyInstance> {
           ? { target: 'pino-pretty', options: { translateTime: 'HH:MM:ss', ignore: 'pid,hostname' } }
           : undefined,
     },
+    // 10 MB so /ingesta/audio can accept ~5 min of OGG/M4A at base64 inflation.
+    bodyLimit: 10 * 1024 * 1024,
   });
 
   await server.register(cors, { origin: true });
