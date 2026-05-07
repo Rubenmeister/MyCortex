@@ -1,8 +1,21 @@
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../lib/auth';
+
 export default function HomePage() {
+  const { session, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (loading) return;
+    router.replace(session ? '/app' : '/login');
+  }, [session, loading, router]);
+
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center gap-4 p-8">
-      <h1 className="text-4xl font-bold">MyCortex</h1>
-      <p className="text-lg text-zinc-500">Your AI second brain.</p>
+    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ color: '#888' }}>Cargando…</div>
     </main>
   );
 }

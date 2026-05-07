@@ -4,6 +4,7 @@ import sensible from '@fastify/sensible';
 import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
 import { cortexModule } from './modules/cortex/index.js';
+import { askModule } from './modules/ask/index.js';
 import { getEnv } from './lib/env.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
@@ -28,6 +29,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(ingestaModule, { prefix: '/ingesta' });
   await server.register(accionModule, { prefix: '/accion' });
   await server.register(cortexModule, { prefix: '/cortex' });
+  await server.register(askModule, { prefix: '/ask' });
 
   return server;
 }
