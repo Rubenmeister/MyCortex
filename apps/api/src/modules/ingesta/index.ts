@@ -14,6 +14,7 @@ export const ingestaModule: FastifyPluginAsync = async (server) => {
   ) {
     const classification = await classify(args.text);
     const node = await insertNode(auth.db, {
+      workspace_id: auth.workspaceId,
       user_id: auth.userId,
       kind: classification.kind,
       category: classification.category,

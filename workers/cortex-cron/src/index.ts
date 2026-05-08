@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { createDb } from '@mycortex/db';
-import { runEvolutionForAllActiveUsers } from '@mycortex/cortex-engine';
+import { runEvolutionForAllActiveWorkspaces } from '@mycortex/cortex-engine';
 
 const EnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
@@ -33,7 +33,7 @@ async function main(): Promise<void> {
   });
 
   const started = Date.now();
-  const summaries = await runEvolutionForAllActiveUsers(db, {
+  const summaries = await runEvolutionForAllActiveWorkspaces(db, {
     hasAnthropicKey: Boolean(cfg.ANTHROPIC_API_KEY),
     hasOpenAIKey: Boolean(cfg.OPENAI_API_KEY),
     lookbackHours: cfg.EVOLUTION_LOOKBACK_HOURS,
@@ -44,13 +44,13 @@ async function main(): Promise<void> {
 
   const totals = summaries.reduce(
     (acc, s) => ({
-      users: acc.users + 1,
+      workspaces: acc.workspaces + 1,
       examined: acc.examined + s.nodesExamined,
       clusters: acc.clusters + s.clustersFound,
       actions: acc.actions + s.actionsCount,
       errors: acc.errors + s.errors.length,
     }),
-    { users: 0, examined: 0, clusters: 0, actions: 0, errors: 0 },
+    { workspaces: 0, examined: 0, clusters: 0, actions: 0, errors: 0 },
   );
 
   log('info', 'cortex_cron_done', { elapsedMs, ...totals });

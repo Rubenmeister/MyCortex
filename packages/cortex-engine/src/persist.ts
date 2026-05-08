@@ -7,8 +7,15 @@ import type {
   EvolutionRunUpdate,
 } from '@mycortex/db/types';
 
-export async function startRun(db: Db, userId: string): Promise<EvolutionRunRow> {
-  const insert: EvolutionRunInsert = { user_id: userId, status: 'running' };
+export async function startRun(
+  db: Db,
+  args: { workspaceId: string; userId: string },
+): Promise<EvolutionRunRow> {
+  const insert: EvolutionRunInsert = {
+    workspace_id: args.workspaceId,
+    user_id: args.userId,
+    status: 'running',
+  };
   const { data, error } = await db
     .from('evolution_runs')
     .insert(insert)
@@ -33,6 +40,7 @@ export async function finishRun(
 export async function recordAction(
   db: Db,
   input: {
+    workspaceId: string;
     runId: string;
     userId: string;
     action: EvolutionAction;
@@ -43,6 +51,7 @@ export async function recordAction(
   },
 ): Promise<void> {
   const insert: EvolutionActionInsert = {
+    workspace_id: input.workspaceId,
     run_id: input.runId,
     user_id: input.userId,
     action: input.action,

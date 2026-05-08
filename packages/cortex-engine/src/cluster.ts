@@ -17,10 +17,11 @@ const DEFAULT_TOP_K = 5;
 /**
  * Find neighbors of a node via the match_nodes RPC. The neighbor with the
  * highest similarity is the target node itself (similarity ≈ 1) — we strip it.
+ * Scoped to a workspace.
  */
 export async function findNeighbors(
   db: Db,
-  userId: string,
+  workspaceId: string,
   embedding: string,
   excludeNodeId: string,
   opts?: { threshold?: number; topK?: number },
@@ -30,7 +31,7 @@ export async function findNeighbors(
 
   const { data, error } = await db.rpc('match_nodes', {
     query_embedding: parsed,
-    query_user_id: userId,
+    query_workspace_id: workspaceId,
     match_count: (opts?.topK ?? DEFAULT_TOP_K) + 1,
     match_threshold: opts?.threshold ?? DEFAULT_THRESHOLD,
   });

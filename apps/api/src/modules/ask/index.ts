@@ -72,7 +72,7 @@ export const askModule: FastifyPluginAsync = async (server) => {
     const queryEmbedding = await embedText(question);
     const { data: matches, error: searchErr } = await auth.db.rpc('match_nodes', {
       query_embedding: queryEmbedding,
-      query_user_id: auth.userId,
+      query_workspace_id: auth.workspaceId,
       match_count: 5,
       match_threshold: 0.25,
     });

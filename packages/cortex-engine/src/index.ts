@@ -1,11 +1,12 @@
 import type { Db } from '@mycortex/db';
-import { findCandidates, listActiveUsers } from './candidates.js';
+import { findCandidates, listActiveWorkspaces } from './candidates.js';
 import { findNeighbors } from './cluster.js';
 import { fuseCluster } from './fusion.js';
 import { finishRun, recordAction, startRun } from './persist.js';
 
 export type EvolutionRunSummary = {
   runId: string;
+  workspaceId: string;
   userId: string;
   nodesExamined: number;
   clustersFound: number;
@@ -30,17 +31,24 @@ const ZERO_BY_ACTION = {
 } as const;
 
 /**
- * Run the evolution layer for a single user.
+ * Run the evolution layer for a single workspace.
  *
  * Idempotent in the sense that re-running on the same nodes will create new
  * suggestions (rows in evolution_actions) but won't double-apply anything —
  * application of suggestions is a separate user-driven step (UPDATE applied_at).
+ *
+ * Requires a `userId` to record on the run/actions: who triggered this run.
+ * For the cron worker, pass the workspace owner_id (or a synthetic 'system'
+ * user if you have one).
  */
-export async function runEvolutionForUser(
+export async function runEvolutionForWorkspace(
   db: Db,
-  userId: string,
-  opts: RunOptions = {},
+  args: {
+    workspaceId: string;
+    userId: string;
+  } & RunOptions,
 ): Promise<EvolutionRunSummary> {
+  const { workspaceId, userId, ...opts } = args;
   const errors: string[] = [];
   const byAction: Record<'merge' | 'complement' | 'correct' | 'skip', number> = { ...ZERO_BY_ACTION };
   let nodesExamined = 0;
@@ -48,10 +56,12 @@ export async function runEvolutionForUser(
   let actionsCount = 0;
   const hasAnthropicKey = opts.hasAnthropicKey ?? false;
 
-  const run = await startRun(db, userId);
+  const run = await startRun(db, { workspaceId, userId });
 
   try {
-    const candidates = await findCandidates(db, userId, { lookbackHours: opts.lookbackHours });
+    const candidates = await findCandidates(db, workspaceId, {
+      lookbackHours: opts.lookbackHours,
+    });
     nodesExamined = candidates.length;
 
     for (const node of candidates) {
@@ -59,7 +69,7 @@ export async function runEvolutionForUser(
 
       let neighbors;
       try {
-        neighbors = await findNeighbors(db, userId, node.embedding, node.id, {
+        neighbors = await findNeighbors(db, workspaceId, node.embedding, node.id, {
           threshold: opts.similarityThreshold,
           topK: opts.topK,
         });
@@ -74,6 +84,7 @@ export async function runEvolutionForUser(
 
       try {
         await recordAction(db, {
+          workspaceId,
           runId: run.id,
           userId,
           action: result.action,
@@ -90,7 +101,7 @@ export async function runEvolutionForUser(
     }
 
     await finishRun(db, run.id, {
-      status: errors.length === 0 ? 'completed' : 'completed',
+      status: 'completed',
       nodes_examined: nodesExamined,
       clusters_found: clustersFound,
       actions_count: actionsCount,
@@ -107,6 +118,7 @@ export async function runEvolutionForUser(
 
   return {
     runId: run.id,
+    workspaceId,
     userId,
     nodesExamined,
     clustersFound,
@@ -116,14 +128,37 @@ export async function runEvolutionForUser(
   };
 }
 
-export async function runEvolutionForAllActiveUsers(
+/**
+ * Cron-worker entrypoint: iterate every workspace with recent activity and
+ * run evolution for each. The owner_id of each workspace is used as the
+ * triggering userId so that `evolution_runs.user_id` always points to a real
+ * (and human-meaningful) user.
+ */
+export async function runEvolutionForAllActiveWorkspaces(
   db: Db,
-  opts: RunOptions & { activeUsersLookbackHours?: number } = {},
+  opts: RunOptions & { activeLookbackHours?: number } = {},
 ): Promise<EvolutionRunSummary[]> {
-  const userIds = await listActiveUsers(db, opts.activeUsersLookbackHours ?? 24);
+  const workspaceIds = await listActiveWorkspaces(db, opts.activeLookbackHours ?? 24);
   const summaries: EvolutionRunSummary[] = [];
-  for (const userId of userIds) {
-    summaries.push(await runEvolutionForUser(db, userId, opts));
+
+  for (const workspaceId of workspaceIds) {
+    // Resolve owner for the run record. If anything goes wrong here, we still
+    // try to run with a placeholder — but a missing workspace would mean a
+    // race condition with deletion, so we just skip that one.
+    const { data: ws } = await db
+      .from('workspaces')
+      .select('owner_id')
+      .eq('id', workspaceId)
+      .maybeSingle();
+    if (!ws) continue;
+
+    summaries.push(
+      await runEvolutionForWorkspace(db, {
+        workspaceId,
+        userId: ws.owner_id,
+        ...opts,
+      }),
+    );
   }
   return summaries;
 }

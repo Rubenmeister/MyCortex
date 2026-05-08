@@ -5,12 +5,12 @@ const DEFAULT_LOOKBACK_HOURS = 24;
 const DEFAULT_LIMIT = 50;
 
 /**
- * Find nodes that need evolution analysis: recent + has embedding + not yet
- * processed by an evolution_action this run cycle.
+ * Find nodes that need evolution analysis: recent + has embedding.
+ * Scoped to a workspace.
  */
 export async function findCandidates(
   db: Db,
-  userId: string,
+  workspaceId: string,
   opts?: { lookbackHours?: number; limit?: number },
 ): Promise<NodeRow[]> {
   const lookback = opts?.lookbackHours ?? DEFAULT_LOOKBACK_HOURS;
@@ -20,7 +20,7 @@ export async function findCandidates(
   const { data, error } = await db
     .from('nodes')
     .select('*')
-    .eq('user_id', userId)
+    .eq('workspace_id', workspaceId)
     .gte('created_at', since)
     .not('embedding', 'is', null)
     .order('created_at', { ascending: false })
@@ -30,12 +30,16 @@ export async function findCandidates(
   return data ?? [];
 }
 
-export async function listActiveUsers(db: Db, lookbackHours = 24): Promise<string[]> {
+/**
+ * List workspaces with activity in the lookback window. Used by the cron
+ * worker to know who to process this run.
+ */
+export async function listActiveWorkspaces(db: Db, lookbackHours = 24): Promise<string[]> {
   const since = new Date(Date.now() - lookbackHours * 3600_000).toISOString();
   const { data, error } = await db
     .from('nodes')
-    .select('user_id')
+    .select('workspace_id')
     .gte('created_at', since);
   if (error) throw error;
-  return Array.from(new Set((data ?? []).map((r) => r.user_id)));
+  return Array.from(new Set((data ?? []).map((r) => r.workspace_id)));
 }
