@@ -1,0 +1,76 @@
+# Cloud Build pipeline for the cortex-cron Job.
+#
+# Trigger from local:
+#   gcloud builds submit . \
+#     --config=workers/cortex-cron/cloudbuild.yaml \
+#     --project=$PROJECT_ID \
+#     --substitutions=_REGION=us-east1
+#
+# After the first deploy, schedule it with:
+#   gcloud scheduler jobs create http cortex-cron-trigger \
+#     --schedule="0 */6 * * *" \
+#     --uri="https://${_REGION}-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/$PROJECT_ID/jobs/cortex-cron:run" \
+#     --http-method=POST \
+#     --oauth-service-account-email=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+#     --time-zone="America/Guayaquil" \
+#     --location=$_REGION
+
+substitutions:
+  _REGION: us-east1
+  _JOB: cortex-cron
+  _REPO: mycortex
+
+steps:
+  # 1. Build
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --file=workers/cortex-cron/Dockerfile
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+      - .
+
+  # 2. Push
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}
+
+  # 3. Deploy as Cloud Run Job (idempotent — `replace` upserts).
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        # Try update first; if the job doesn't exist yet, create it.
+        if gcloud run jobs describe ${_JOB} --region=${_REGION} --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA \
+            --region=${_REGION} \
+            --task-timeout=600s \
+            --memory=512Mi \
+            --cpu=1 \
+            --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com
+        else
+          gcloud run jobs create ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA \
+            --region=${_REGION} \
+            --task-timeout=600s \
+            --memory=512Mi \
+            --cpu=1 \
+            --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com
+        fi
+
+images:
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
