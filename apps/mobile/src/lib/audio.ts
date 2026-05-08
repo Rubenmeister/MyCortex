@@ -51,3 +51,28 @@ export async function stopRecording(
 export async function readAsBase64(uri: string): Promise<string> {
   return FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
 }
+
+/**
+ * Play a base64-encoded audio clip (used for the TTS response from /ask).
+ * Returns the Sound instance so the caller can replay or stop it.
+ */
+export async function playBase64Audio(
+  base64: string,
+  mimeType = 'audio/mp3',
+): Promise<Audio.Sound> {
+  await Audio.setAudioModeAsync({
+    allowsRecordingIOS: false,
+    playsInSilentModeIOS: true,
+    staysActiveInBackground: false,
+  });
+  const { sound } = await Audio.Sound.createAsync(
+    { uri: `data:${mimeType};base64,${base64}` },
+    { shouldPlay: true },
+  );
+  sound.setOnPlaybackStatusUpdate((status) => {
+    if (status.isLoaded && status.didJustFinish) {
+      sound.unloadAsync().catch(() => undefined);
+    }
+  });
+  return sound;
+}

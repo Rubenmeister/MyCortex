@@ -17,20 +17,25 @@ type Props = {
  *
  * Push-to-talk works with mouse, touch, and (when focused) the spacebar.
  */
+const MIN_RECORDING_MS = 800;
+
 export function VoiceButton({ onRecorded, disabled, label = 'Mantén pulsado para hablar' }: Props) {
   const [recording, setRecording] = useState(false);
   const [busy, setBusy] = useState(false);
   const [supported, setSupported] = useState(true);
+  const [hint, setHint] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const startedAtRef = useRef<number>(0);
 
   useEffect(() => {
     setSupported(typeof window !== 'undefined' && !!navigator.mediaDevices?.getUserMedia && !!window.MediaRecorder);
   }, []);
 
   const start = async () => {
-    if (busy || disabled) return;
+    if (busy || disabled || recording) return;
+    setHint(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
@@ -41,12 +46,20 @@ export function VoiceButton({ onRecorded, disabled, label = 'Mantén pulsado par
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = async () => {
+        const elapsed = Date.now() - startedAtRef.current;
         const type = recorder.mimeType || 'audio/webm';
+        streamRef.current?.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+
+        if (elapsed < MIN_RECORDING_MS || chunksRef.current.length === 0) {
+          setHint('Mantén pulsado más tiempo (habla al menos 1 segundo).');
+          setTimeout(() => setHint(null), 4000);
+          return;
+        }
+
         const blob = new Blob(chunksRef.current, { type });
         const buffer = await blob.arrayBuffer();
         const base64 = bufferToBase64(buffer);
-        streamRef.current?.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
         setBusy(true);
         try {
           await onRecorded(base64, type);
@@ -54,12 +67,14 @@ export function VoiceButton({ onRecorded, disabled, label = 'Mantén pulsado par
           setBusy(false);
         }
       };
+      startedAtRef.current = Date.now();
       recorder.start();
       recorderRef.current = recorder;
       setRecording(true);
     } catch (err) {
       console.error('mic error', err);
       setRecording(false);
+      setHint('No pude acceder al micrófono. Concede el permiso en el navegador.');
     }
   };
 
@@ -84,29 +99,29 @@ export function VoiceButton({ onRecorded, disabled, label = 'Mantén pulsado par
   const state: 'idle' | 'recording' | 'processing' = busy ? 'processing' : recording ? 'recording' : 'idle';
 
   return (
-    <button
-      type="button"
-      onMouseDown={start}
-      onMouseUp={stop}
-      onMouseLeave={stop}
-      onTouchStart={(e) => {
-        e.preventDefault();
-        start();
-      }}
-      onTouchEnd={(e) => {
-        e.preventDefault();
-        stop();
-      }}
-      disabled={disabled || busy}
-      className={`voice-btn voice-${state}`}
-      aria-label={label}
-    >
-      <span className="voice-glyph">
-        {state === 'processing' ? '⏳' : state === 'recording' ? '◼' : '🎙'}
-      </span>
-      <span className="voice-label">
-        {state === 'processing' ? 'Procesando…' : state === 'recording' ? 'Suelta para enviar' : label}
-      </span>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
+      <button
+        type="button"
+        onPointerDown={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLButtonElement).setPointerCapture(e.pointerId);
+          start();
+        }}
+        onPointerUp={(e) => {
+          e.preventDefault();
+          stop();
+        }}
+        onPointerCancel={() => stop()}
+        disabled={disabled || busy}
+        className={`voice-btn voice-${state}`}
+        aria-label={label}
+      >
+        <span className="voice-glyph">
+          {state === 'processing' ? '⏳' : state === 'recording' ? '◼' : '🎙'}
+        </span>
+        <span className="voice-label">
+          {state === 'processing' ? 'Procesando…' : state === 'recording' ? 'Suelta para enviar' : label}
+        </span>
       <style jsx>{`
         .voice-btn {
           display: flex;
@@ -163,7 +178,24 @@ export function VoiceButton({ onRecorded, disabled, label = 'Mantén pulsado par
           }
         }
       `}</style>
-    </button>
+      </button>
+      {hint && (
+        <div
+          style={{
+            color: '#ffb347',
+            fontSize: 13,
+            background: '#2a1f10',
+            padding: '8px 14px',
+            borderRadius: 8,
+            border: '1px solid #4a3520',
+            maxWidth: 320,
+            textAlign: 'center',
+          }}
+        >
+          {hint}
+        </div>
+      )}
+    </div>
   );
 }
 

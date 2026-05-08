@@ -85,3 +85,30 @@ export async function runCortex(): Promise<{
   if (!res.ok) throw new Error(`cortex ${res.status}: ${await res.text()}`);
   return res.json();
 }
+
+export type AskResult = {
+  question: string;
+  answer: string;
+  sources: { id: string; content: string; category: string; similarity: number }[];
+  audioBase64?: string;
+  transcriptionMs?: number;
+  ttsMs?: number;
+};
+
+export async function ask(args: {
+  text?: string;
+  audioBase64?: string;
+  mimeType?: string;
+  withTTS?: boolean;
+}): Promise<AskResult> {
+  const res = await fetch(`${API_URL}/ask`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({
+      ...args,
+      ...(args.audioBase64 ? { language: 'es' } : {}),
+    }),
+  });
+  if (!res.ok) throw new Error(`ask ${res.status}: ${await res.text()}`);
+  return res.json();
+}

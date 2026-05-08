@@ -26,6 +26,13 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="ask"
+        options={{
+          title: 'Preguntar',
+          tabBarIcon: ({ color }) => <Icon color={color}>💬</Icon>,
+        }}
+      />
+      <Tabs.Screen
         name="nodes"
         options={{
           title: 'Notas',
