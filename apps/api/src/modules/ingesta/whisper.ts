@@ -35,11 +35,15 @@ export async function transcribeAudio(
   if (opts.language) form.append('language', opts.language);
 
   const start = Date.now();
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+  // Cast to globalThis.Response explicitly — some monorepo type-check
+  // contexts (Vercel's post-build TS step) don't pick up @types/node's
+  // Response augmentation through the workspace deps. Functionally
+  // identical at runtime.
+  const res = (await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
     body: form,
-  });
+  })) as globalThis.Response;
   const durationMs = Date.now() - start;
 
   if (!res.ok) {

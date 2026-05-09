@@ -20,8 +20,12 @@ substitutions:
   _REGION: us-east1
   _SERVICE: mycortex-api
   _REPO: mycortex
-  _MIN_INSTANCES: '0'
-  _MAX_INSTANCES: '5'
+  # min=1 because MyCortex is positioned as B2B + personal — cold starts
+  # of 2-3s on the first request after idle break enterprise UX. The added
+  # ~$8/mes for always-on is trivial vs the perceived quality difference.
+  # If you ever need to slash costs for purely-personal usage, drop to 0.
+  _MIN_INSTANCES: '1'
+  _MAX_INSTANCES: '10'
   # Non-secret env. Pass via --substitutions on submit if they ever change.
   _SUPABASE_URL: 'https://ifsdhwihdjrogebsutem.supabase.co'
   _SUPABASE_ANON_KEY: 'sb_publishable_LbMt0RlbJfDcgTZSF49Wsg_WKvFSd6K'
