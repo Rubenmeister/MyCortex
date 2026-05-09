@@ -2,7 +2,7 @@
 # Pattern mirrors apps/api/Dockerfile — cache-friendly deps, prod-only runtime.
 
 # ---------- Stage 1: deps ----------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 WORKDIR /repo
 
@@ -27,7 +27,7 @@ COPY workers/cortex-cron/ workers/cortex-cron/
 RUN pnpm --filter @mycortex/cortex-cron build
 
 # ---------- Stage 3: runtime ----------
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 WORKDIR /app
 

@@ -22,6 +22,9 @@ substitutions:
   _REPO: mycortex
   _MIN_INSTANCES: '0'
   _MAX_INSTANCES: '5'
+  # Non-secret env. Pass via --substitutions on submit if they ever change.
+  _SUPABASE_URL: 'https://ifsdhwihdjrogebsutem.supabase.co'
+  _SUPABASE_ANON_KEY: 'sb_publishable_LbMt0RlbJfDcgTZSF49Wsg_WKvFSd6K'
 
 steps:
   # 1. Build the image
@@ -30,7 +33,7 @@ steps:
     args:
       - build
       - --file=apps/api/Dockerfile
-      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
       - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
       - .
 
@@ -43,6 +46,9 @@ steps:
       - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
 
   # 3. Deploy to Cloud Run.
+  #    Env vars + secrets are applied in this single step so the very first
+  #    revision can boot (the api's Zod env validator exits if SUPABASE_*
+  #    are missing). Subsequent deploys preserve env unless the flags change.
   #    --no-traffic on subsequent deploys would let us canary; for v1 we go
   #    straight to traffic. Switch later when we add canary/rollback workflows.
   - name: gcr.io/google.com/cloudsdktool/cloud-sdk
@@ -52,7 +58,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE}
-      - --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+      - --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
       - --region=${_REGION}
       - --platform=managed
       - --allow-unauthenticated
@@ -64,9 +70,11 @@ steps:
       - --concurrency=80
       - --timeout=60s
       - --service-account=mycortex-api-sa@$PROJECT_ID.iam.gserviceaccount.com
+      - --set-env-vars=NODE_ENV=production,LOG_LEVEL=info,SUPABASE_URL=${_SUPABASE_URL},SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}
+      - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest
 
 images:
-  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$COMMIT_SHA
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
   - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
 
 options:

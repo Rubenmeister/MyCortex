@@ -4,10 +4,10 @@
 #   the lockfile, in a pnpm-aware way. Cloud Run images are pulled cold often
 #   so we keep the runtime layer minimal.
 # Stage 2 (build): compile TypeScript to dist/.
-# Stage 3 (runtime): node:20-alpine + just dist/ + production node_modules.
+# Stage 3 (runtime): node:22-alpine + just dist/ + production node_modules.
 
 # ---------- Stage 1: deps ----------
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 WORKDIR /repo
 
@@ -36,7 +36,7 @@ COPY apps/api/ apps/api/
 RUN pnpm --filter @mycortex/api build
 
 # ---------- Stage 3: runtime ----------
-FROM node:20-alpine AS runtime
+FROM node:22-alpine AS runtime
 RUN corepack enable && corepack prepare pnpm@10.30.3 --activate
 WORKDIR /app
 

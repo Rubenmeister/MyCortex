@@ -27,7 +27,7 @@ steps:
     args:
       - build
       - --file=workers/cortex-cron/Dockerfile
-      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
       - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
       - .
 
@@ -49,7 +49,7 @@ steps:
         # Try update first; if the job doesn't exist yet, create it.
         if gcloud run jobs describe ${_JOB} --region=${_REGION} --project=$PROJECT_ID >/dev/null 2>&1; then
           gcloud run jobs update ${_JOB} \
-            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
             --region=${_REGION} \
             --task-timeout=600s \
             --memory=512Mi \
@@ -58,7 +58,7 @@ steps:
             --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com
         else
           gcloud run jobs create ${_JOB} \
-            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
             --region=${_REGION} \
             --task-timeout=600s \
             --memory=512Mi \
@@ -68,7 +68,7 @@ steps:
         fi
 
 images:
-  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$COMMIT_SHA
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
   - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
 
 options:
