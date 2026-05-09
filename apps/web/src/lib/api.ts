@@ -1,8 +1,9 @@
 'use client';
 
 import { supabase } from './supabase';
+import { publicConfig } from './publicConfig';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000';
+const API_URL = publicConfig.apiUrl;
 
 async function authHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
