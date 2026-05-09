@@ -1,0 +1,283 @@
+import type { FastifyPluginAsync } from 'fastify';
+import { z } from 'zod';
+import type { WorkspaceRole } from '@mycortex/db/types';
+import { requireAuth } from '../../lib/auth.js';
+import { getDb } from '../../lib/db.js';
+
+/**
+ * Workspaces module: list/create workspaces, manage members.
+ *
+ * Most reads use the user-scoped `auth.db` (RLS enforces "members only see
+ * their own membership"). For listing OTHER members of a workspace we need
+ * to bypass RLS — the service-role client does this, AFTER we verify the
+ * caller is themselves a member of the target workspace.
+ */
+export const workspacesModule: FastifyPluginAsync = async (server) => {
+  // ---------------------------------------------------------------- LIST
+  /**
+   * GET /workspaces — every workspace the current user belongs to,
+   * with their role in each.
+   */
+  server.get('/', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+
+    // Two queries since our hand-typed Database doesn't declare the FK
+    // relationship between workspace_members and workspaces (that would
+    // otherwise let us nest-select in one go via Supabase's relationship
+    // resolver). Cheap enough for the current scale.
+    const db = getDb();
+    const { data: memberships, error: mErr } = await db
+      .from('workspace_members')
+      .select('workspace_id, role')
+      .eq('user_id', auth.userId);
+    if (mErr) return reply.code(500).send({ error: 'db_error', detail: mErr.message });
+
+    const ids = (memberships ?? []).map((m) => m.workspace_id);
+    if (ids.length === 0) return reply.code(200).send({ workspaces: [] });
+
+    const { data: ws, error: wErr } = await db
+      .from('workspaces')
+      .select('id, name, slug, is_personal, owner_id, created_at')
+      .in('id', ids);
+    if (wErr) return reply.code(500).send({ error: 'db_error', detail: wErr.message });
+
+    const roleByWs = new Map((memberships ?? []).map((m) => [m.workspace_id, m.role as WorkspaceRole]));
+    const workspaces = (ws ?? []).map((w) => ({
+      ...w,
+      role: roleByWs.get(w.id) ?? ('member' as WorkspaceRole),
+    }));
+    // Personal first, then by created_at
+    workspaces.sort((a, b) => {
+      if (a.is_personal !== b.is_personal) return a.is_personal ? -1 : 1;
+      return a.created_at < b.created_at ? -1 : 1;
+    });
+
+    return reply.code(200).send({ workspaces });
+  });
+
+  // ---------------------------------------------------------------- CREATE
+  const CreateBody = z.object({
+    name: z.string().trim().min(1).max(80),
+  });
+  /**
+   * POST /workspaces — create a NEW non-personal workspace owned by the
+   * current user. The user is automatically added as 'owner' member.
+   */
+  server.post('/', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const body = CreateBody.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
+
+    const slug = `team-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const db = getDb(); // service role: workspaces RLS allows owner self-insert but it's simpler from server side
+
+    const { data: ws, error: e1 } = await db
+      .from('workspaces')
+      .insert({ name: body.data.name, slug, owner_id: auth.userId, is_personal: false })
+      .select('id, name, slug, is_personal, owner_id, created_at')
+      .single();
+    if (e1 || !ws) return reply.code(500).send({ error: 'create_workspace_failed', detail: e1?.message });
+
+    const { error: e2 } = await db
+      .from('workspace_members')
+      .insert({ workspace_id: ws.id, user_id: auth.userId, role: 'owner' });
+    if (e2) return reply.code(500).send({ error: 'add_owner_failed', detail: e2.message });
+
+    return reply.code(201).send({ workspace: { ...ws, role: 'owner' as WorkspaceRole } });
+  });
+
+  // ---------------------------------------------------------------- LIST MEMBERS
+  /**
+   * GET /workspaces/:id/members — list all members of a workspace the
+   * caller belongs to. Uses service-role to see members other than self
+   * (RLS would otherwise filter to just the caller's own row).
+   */
+  const IdParam = z.object({ id: z.string().uuid() });
+  server.get('/:id/members', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_workspace_id' });
+
+    const callerMembership = await assertMember(params.data.id, auth.userId);
+    if (!callerMembership) return reply.code(403).send({ error: 'not_a_member' });
+
+    const db = getDb();
+    const { data, error } = await db
+      .from('workspace_members')
+      .select('user_id, role, created_at')
+      .eq('workspace_id', params.data.id)
+      .order('created_at', { ascending: true });
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+
+    // Pull email per user via Supabase admin API (auth.users is not directly queryable via REST).
+    const members = await Promise.all(
+      (data ?? []).map(async (row) => {
+        const { data: u } = await db.auth.admin.getUserById(row.user_id);
+        return {
+          user_id: row.user_id,
+          role: row.role as WorkspaceRole,
+          email: u?.user?.email ?? null,
+          created_at: row.created_at,
+        };
+      }),
+    );
+
+    return reply.code(200).send({ members });
+  });
+
+  // ---------------------------------------------------------------- INVITE
+  const InviteBody = z.object({
+    email: z.string().email(),
+    role: z.enum(['admin', 'member', 'viewer']).default('member'),
+  });
+  /**
+   * POST /workspaces/:id/members — invite an EXISTING user by email.
+   * For MVP we only support inviting users who already have an account
+   * (no email invitation flow yet). 404s if the email doesn't match an
+   * auth.users entry.
+   *
+   * Caller must be owner or admin of the workspace.
+   */
+  server.post('/:id/members', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_workspace_id' });
+    const body = InviteBody.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
+
+    const callerMembership = await assertMember(params.data.id, auth.userId);
+    if (!callerMembership) return reply.code(403).send({ error: 'not_a_member' });
+    if (callerMembership.role !== 'owner' && callerMembership.role !== 'admin') {
+      return reply.code(403).send({ error: 'insufficient_role' });
+    }
+
+    // Resolve target user by email (admin API).
+    const db = getDb();
+    const { data: usersList, error: lookupErr } = await db.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (lookupErr) return reply.code(500).send({ error: 'lookup_failed', detail: lookupErr.message });
+    const target = usersList.users.find((u) => u.email?.toLowerCase() === body.data.email.toLowerCase());
+    if (!target) return reply.code(404).send({ error: 'user_not_found', email: body.data.email });
+
+    // Already a member? Idempotent — return current row.
+    const { data: existing } = await db
+      .from('workspace_members')
+      .select('role, created_at')
+      .eq('workspace_id', params.data.id)
+      .eq('user_id', target.id)
+      .maybeSingle();
+    if (existing) {
+      return reply.code(200).send({
+        member: { user_id: target.id, role: existing.role, email: target.email, created_at: existing.created_at },
+        already_member: true,
+      });
+    }
+
+    const { error: insErr } = await db
+      .from('workspace_members')
+      .insert({ workspace_id: params.data.id, user_id: target.id, role: body.data.role });
+    if (insErr) return reply.code(500).send({ error: 'insert_failed', detail: insErr.message });
+
+    return reply.code(201).send({
+      member: {
+        user_id: target.id,
+        role: body.data.role,
+        email: target.email,
+        created_at: new Date().toISOString(),
+      },
+    });
+  });
+
+  // ---------------------------------------------------------------- CHANGE ROLE
+  const RoleBody = z.object({
+    role: z.enum(['owner', 'admin', 'member', 'viewer']),
+  });
+  const MemberParams = z.object({ id: z.string().uuid(), userId: z.string().uuid() });
+  /**
+   * PATCH /workspaces/:id/members/:userId — change a member's role.
+   * Only the workspace owner can change roles.
+   */
+  server.patch('/:id/members/:userId', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = MemberParams.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' });
+    const body = RoleBody.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
+
+    const ws = await getWorkspaceForOwnerCheck(params.data.id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    if (ws.owner_id !== auth.userId) return reply.code(403).send({ error: 'only_owner_can_change_roles' });
+
+    const { error } = await getDb()
+      .from('workspace_members')
+      .update({ role: body.data.role })
+      .eq('workspace_id', params.data.id)
+      .eq('user_id', params.data.userId);
+    if (error) return reply.code(500).send({ error: 'update_failed', detail: error.message });
+
+    return reply.code(200).send({ ok: true });
+  });
+
+  // ---------------------------------------------------------------- REMOVE
+  /**
+   * DELETE /workspaces/:id/members/:userId — remove a member from the
+   * workspace. Owner can remove anyone except themselves; non-owners can
+   * only remove themselves.
+   */
+  server.delete('/:id/members/:userId', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = MemberParams.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' });
+
+    const ws = await getWorkspaceForOwnerCheck(params.data.id);
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+    if (ws.is_personal) return reply.code(400).send({ error: 'cannot_modify_personal_workspace' });
+
+    const isOwnerAction = ws.owner_id === auth.userId;
+    const isSelfRemoval = params.data.userId === auth.userId;
+    if (!isOwnerAction && !isSelfRemoval) {
+      return reply.code(403).send({ error: 'cannot_remove_others' });
+    }
+    if (isOwnerAction && params.data.userId === ws.owner_id) {
+      return reply.code(400).send({ error: 'owner_cannot_self_remove' });
+    }
+
+    const { error } = await getDb()
+      .from('workspace_members')
+      .delete()
+      .eq('workspace_id', params.data.id)
+      .eq('user_id', params.data.userId);
+    if (error) return reply.code(500).send({ error: 'delete_failed', detail: error.message });
+
+    return reply.code(200).send({ ok: true });
+  });
+};
+
+// ---------------------------------------------------------------- helpers
+
+async function assertMember(workspaceId: string, userId: string) {
+  const { data } = await getDb()
+    .from('workspace_members')
+    .select('role')
+    .eq('workspace_id', workspaceId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  return data;
+}
+
+async function getWorkspaceForOwnerCheck(workspaceId: string) {
+  const { data } = await getDb()
+    .from('workspaces')
+    .select('id, owner_id, is_personal')
+    .eq('id', workspaceId)
+    .maybeSingle();
+  return data;
+}
