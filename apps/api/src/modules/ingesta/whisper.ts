@@ -34,16 +34,24 @@ export async function transcribeAudio(
   form.append('model', 'whisper-1');
   if (opts.language) form.append('language', opts.language);
 
+  // Minimal shape of the fetch Response we actually use. The global
+  // `Response` type sometimes resolves to something without these methods
+  // when type-checked in unusual contexts (e.g. Vercel's monorepo build
+  // running tsc against the api). Pinning our own interface decouples
+  // the typecheck from whatever lib the host environment thinks it has.
+  type FetchLikeResponse = {
+    ok: boolean;
+    status: number;
+    text(): Promise<string>;
+    json(): Promise<unknown>;
+  };
+
   const start = Date.now();
-  // Cast to globalThis.Response explicitly — some monorepo type-check
-  // contexts (Vercel's post-build TS step) don't pick up @types/node's
-  // Response augmentation through the workspace deps. Functionally
-  // identical at runtime.
   const res = (await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}` },
     body: form,
-  })) as globalThis.Response;
+  })) as unknown as FetchLikeResponse;
   const durationMs = Date.now() - start;
 
   if (!res.ok) {
