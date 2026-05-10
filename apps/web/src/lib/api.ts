@@ -49,13 +49,35 @@ export type IngestResult = {
   transcriptionMs?: number;
 };
 
+export type NoteSource = {
+  kind: 'note';
+  id: string;
+  content: string;
+  category: string;
+  similarity: number;
+};
+
+export type WebSource = {
+  kind: 'web';
+  title: string;
+  url: string;
+  snippet: string;
+  score: number;
+};
+
 export type AskResult = {
   question: string;
   answer: string;
-  sources: { id: string; content: string; category: string; similarity: number }[];
+  /** Notes from the user's own second brain (semantic search). */
+  sources: NoteSource[];
+  /** Live web search results (Tavily) — populated when notes are weak or forced. */
+  webSources: WebSource[];
+  webSearched: boolean;
+  webSearchedReason?: string | null;
   audioBase64?: string;
   transcriptionMs?: number;
   ttsMs?: number;
+  webMs?: number;
 };
 
 export type RecentNode = {
@@ -93,6 +115,8 @@ export async function ask(args: {
   audioBase64?: string;
   mimeType?: string;
   withTTS?: boolean;
+  /** Force web search even when notes match well. Default: smart fallback. */
+  forceWeb?: boolean;
 }): Promise<AskResult> {
   const res = await fetch(`${API_URL}/ask`, {
     method: 'POST',

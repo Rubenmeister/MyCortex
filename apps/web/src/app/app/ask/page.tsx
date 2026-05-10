@@ -162,29 +162,65 @@ export default function AskPage() {
 }
 
 function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void }) {
+  const totalSources = result.sources.length + result.webSources.length;
   return (
     <div className="ans">
       <div className="q">❓ {result.question}</div>
       <div className="a">{result.answer}</div>
-      {result.audioBase64 && (
-        <button type="button" className="replay" onClick={onReplay}>
-          🔊 Reproducir respuesta
-        </button>
-      )}
 
-      {result.sources.length > 0 && (
+      <div className="actions">
+        {result.audioBase64 && (
+          <button type="button" className="replay" onClick={onReplay}>
+            🔊 Reproducir respuesta
+          </button>
+        )}
+        {result.webSearched && (
+          <span className="web-badge" title={result.webSearchedReason ?? ''}>
+            🌐 web consultada
+          </span>
+        )}
+      </div>
+
+      {totalSources > 0 && (
         <details className="sources">
-          <summary>{result.sources.length} fuentes consultadas</summary>
-          <ul>
-            {result.sources.map((s) => (
-              <li key={s.id}>
-                <span style={{ color: '#666', fontSize: 11 }}>
-                  sim={s.similarity.toFixed(2)} · {s.category}
-                </span>
-                <div style={{ marginTop: 2 }}>{s.content.slice(0, 160)}…</div>
-              </li>
-            ))}
-          </ul>
+          <summary>
+            {totalSources} fuente{totalSources === 1 ? '' : 's'} consultada{totalSources === 1 ? '' : 's'}
+            {result.sources.length > 0 && result.webSources.length > 0 &&
+              ` (${result.sources.length} notas + ${result.webSources.length} web)`}
+          </summary>
+
+          {result.sources.length > 0 && (
+            <>
+              <div className="src-section">📝 De tus notas</div>
+              <ul>
+                {result.sources.map((s) => (
+                  <li key={s.id}>
+                    <span style={{ color: '#666', fontSize: 11 }}>
+                      sim={s.similarity.toFixed(2)} · {s.category}
+                    </span>
+                    <div style={{ marginTop: 2 }}>{s.content.slice(0, 160)}…</div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+
+          {result.webSources.length > 0 && (
+            <>
+              <div className="src-section src-web">🌐 De la web</div>
+              <ul>
+                {result.webSources.map((w) => (
+                  <li key={w.url} className="web-li">
+                    <a href={w.url} target="_blank" rel="noopener noreferrer" className="web-title">
+                      {w.title}
+                    </a>
+                    <div className="web-domain">{new URL(w.url).hostname}</div>
+                    <div style={{ marginTop: 2 }}>{w.snippet}</div>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
         </details>
       )}
 
@@ -241,6 +277,49 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
           line-height: 1.4;
           padding: 8px 12px;
           border-left: 2px solid #2a2a3a;
+        }
+        .actions {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          margin-top: 16px;
+        }
+        .web-badge {
+          display: inline-block;
+          background: #1a2a3a;
+          color: #88c;
+          font-size: 11px;
+          padding: 4px 10px;
+          border-radius: 99px;
+          border: 1px solid #2a3a4a;
+        }
+        .src-section {
+          color: #888;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-top: 12px;
+          margin-bottom: 4px;
+        }
+        .src-web {
+          color: #88c;
+        }
+        .web-li {
+          border-left-color: #2a3a5a !important;
+        }
+        .web-title {
+          color: #aac;
+          font-weight: 600;
+          text-decoration: none;
+          font-size: 13px;
+        }
+        .web-title:hover {
+          text-decoration: underline;
+        }
+        .web-domain {
+          color: #666;
+          font-size: 11px;
+          margin-top: 1px;
         }
       `}</style>
     </div>

@@ -49,4 +49,6 @@ export async function tts(
   return Buffer.from(await res.arrayBuffer());
 }
 
+export { tavilySearch, type TavilyResult, type TavilySearchResponse, type TavilySearchOptions } from './tavily.js';
+
 export { generateText, streamText, generateObject, streamObject, embed } from 'ai';
