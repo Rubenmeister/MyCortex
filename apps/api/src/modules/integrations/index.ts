@@ -4,15 +4,20 @@ import { requireAuth } from '../../lib/auth.js';
 import { getDb } from '../../lib/db.js';
 import { getEnv } from '../../lib/env.js';
 import {
-  buildAuthUrl,
-  DRIVE_OAUTH_SCOPE,
-  exchangeCode,
-  fetchUserInfo,
+  buildAuthUrl as buildDriveAuthUrl,
+  exchangeCode as exchangeDriveCode,
+  fetchUserInfo as fetchDriveUserInfo,
   listFolders,
-  refreshAccessToken,
-  signState,
-  verifyState,
+  refreshAccessToken as refreshDriveToken,
 } from './drive.js';
+import {
+  buildAuthUrl as buildGmailAuthUrl,
+  exchangeCode as exchangeGmailCode,
+  fetchUserInfo as fetchGmailUserInfo,
+  listLabels,
+  refreshAccessToken as refreshGmailToken,
+} from './gmail.js';
+import { signState, verifyState } from './oauth-shared.js';
 import type { IntegrationProvider, IntegrationRow } from '@mycortex/db/types';
 
 /**
@@ -57,7 +62,12 @@ async function ensureFreshToken(integration: IntegrationRow): Promise<string> {
   if (!integration.refresh_token) {
     throw new Error('token_expired_no_refresh');
   }
-  const refreshed = await refreshAccessToken(integration.refresh_token);
+  // Both Drive and Gmail use Google's identical refresh endpoint, but we
+  // route via the provider helper so future non-Google providers can plug in.
+  const refreshed =
+    integration.provider === 'gmail'
+      ? await refreshGmailToken(integration.refresh_token)
+      : await refreshDriveToken(integration.refresh_token);
   const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
   await getDb()
     .from('integrations')
@@ -116,7 +126,7 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       userId: auth.userId,
       nonce: Math.random().toString(36).slice(2),
     });
-    const authUrl = buildAuthUrl(state);
+    const authUrl = buildDriveAuthUrl(state);
     return reply.code(200).send({ authUrl });
   });
 
@@ -152,7 +162,7 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
 
     let tokens;
     try {
-      tokens = await exchangeCode(q.code);
+      tokens = await exchangeDriveCode(q.code);
     } catch (err) {
       req.log.error({ err: String(err) }, 'drive_token_exchange_failed');
       return reply.redirect(`${back}?drive_error=token_exchange_failed`);
@@ -172,7 +182,7 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
 
     let userInfo;
     try {
-      userInfo = await fetchUserInfo(tokens.access_token);
+      userInfo = await fetchDriveUserInfo(tokens.access_token);
     } catch (err) {
       req.log.error({ err: String(err) }, 'drive_userinfo_failed');
       return reply.redirect(`${back}?drive_error=userinfo_failed`);
@@ -319,6 +329,160 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       return reply.code(200).send({ folders });
     } catch (err) {
       return reply.code(502).send({ error: 'drive_list_failed', detail: String(err).slice(0, 200) });
+    }
+  });
+
+  // ---- GET /integrations/gmail/connect -----------------------------------
+  // Build the Gmail OAuth URL bound to the current user+workspace.
+  server.get('/gmail/connect', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const env = getEnv();
+    if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET || !env.GMAIL_OAUTH_REDIRECT_URI) {
+      return reply.code(503).send({ error: 'gmail_oauth_not_configured' });
+    }
+    const state = signState({
+      workspaceId: auth.workspaceId,
+      userId: auth.userId,
+      nonce: Math.random().toString(36).slice(2),
+    });
+    const authUrl = buildGmailAuthUrl(state);
+    return reply.code(200).send({ authUrl });
+  });
+
+  // ---- GET /integrations/gmail/callback ----------------------------------
+  // Mirrors /drive/callback. The OAuth flow is identical except for scope
+  // and the granular-consent check.
+  server.get('/gmail/callback', async (req, reply) => {
+    const env = getEnv();
+    const QuerySchema = z.object({
+      code: z.string().optional(),
+      error: z.string().optional(),
+      state: z.string().optional(),
+    });
+    const q = QuerySchema.parse(req.query);
+    const back = `${env.WEB_BASE_URL}/app/settings/integrations`;
+
+    if (q.error) {
+      return reply.redirect(`${back}?gmail_error=${encodeURIComponent(q.error)}`);
+    }
+    if (!q.code || !q.state) {
+      return reply.redirect(`${back}?gmail_error=missing_code_or_state`);
+    }
+
+    let stateData;
+    try {
+      stateData = verifyState(q.state);
+    } catch (err) {
+      req.log.warn({ err: String(err) }, 'gmail_state_invalid');
+      return reply.redirect(`${back}?gmail_error=invalid_state`);
+    }
+
+    let tokens;
+    try {
+      tokens = await exchangeGmailCode(q.code);
+    } catch (err) {
+      req.log.error({ err: String(err) }, 'gmail_token_exchange_failed');
+      return reply.redirect(`${back}?gmail_error=token_exchange_failed`);
+    }
+
+    // Granular consent: reject if gmail.readonly is missing.
+    const grantedScopes = new Set(tokens.scope.split(/\s+/).filter(Boolean));
+    if (!grantedScopes.has('https://www.googleapis.com/auth/gmail.readonly')) {
+      req.log.warn({ scope: tokens.scope }, 'gmail_scope_missing_readonly');
+      return reply.redirect(
+        `${back}?gmail_error=missing_gmail_scope&granted=${encodeURIComponent(tokens.scope)}`,
+      );
+    }
+
+    let userInfo;
+    try {
+      userInfo = await fetchGmailUserInfo(tokens.access_token);
+    } catch (err) {
+      req.log.error({ err: String(err) }, 'gmail_userinfo_failed');
+      return reply.redirect(`${back}?gmail_error=userinfo_failed`);
+    }
+
+    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+    // Upsert integration row.
+    const { data: integrationRow, error: upsertErr } = await getDb()
+      .from('integrations')
+      .upsert(
+        {
+          workspace_id: stateData.workspaceId,
+          user_id: stateData.userId,
+          provider: 'gmail',
+          status: 'active',
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token ?? null,
+          token_expires_at: expiresAt,
+          scope: tokens.scope,
+          external_account_email: userInfo.email,
+          external_account_id: userInfo.id,
+          metadata: { name: userInfo.name ?? null, picture: userInfo.picture ?? null },
+          last_error: null,
+        },
+        { onConflict: 'workspace_id,provider,external_account_id' },
+      )
+      .select()
+      .single();
+    if (upsertErr || !integrationRow) {
+      req.log.error({ err: upsertErr?.message }, 'gmail_save_integration_failed');
+      return reply.redirect(`${back}?gmail_error=save_failed`);
+    }
+
+    // Auto-create a default sync source: INBOX, last 90 days. Users can
+    // remove it or add more labels later. The worker reads display_name +
+    // external_id (= label id) for what to fetch.
+    await getDb()
+      .from('sync_sources')
+      .upsert(
+        {
+          integration_id: integrationRow.id,
+          workspace_id: stateData.workspaceId,
+          external_id: 'INBOX',
+          display_name: 'INBOX (last 90 days)',
+          status: 'active',
+        },
+        { onConflict: 'integration_id,external_id' },
+      );
+
+    return reply.redirect(`${back}?gmail_connected=${encodeURIComponent(userInfo.email)}`);
+  });
+
+  // ---- GET /integrations/:id/labels --------------------------------------
+  // List the user's Gmail labels so they can pick which to sync. (Mirrors
+  // /:id/folders for Drive but for Gmail.)
+  server.get('/:id/labels', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z.object({ id: z.string().uuid() }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+
+    const { data: integration, error } = await getDb()
+      .from('integrations')
+      .select('*')
+      .eq('id', params.data.id)
+      .eq('workspace_id', auth.workspaceId)
+      .maybeSingle();
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    if (!integration) return reply.code(404).send({ error: 'integration_not_found' });
+    if (integration.provider !== 'gmail')
+      return reply.code(400).send({ error: 'wrong_provider' });
+
+    let token: string;
+    try {
+      token = await ensureFreshToken(integration);
+    } catch (err) {
+      return reply.code(401).send({ error: 'token_refresh_failed', detail: String(err).slice(0, 120) });
+    }
+
+    try {
+      const labels = await listLabels(token);
+      return reply.code(200).send({ labels });
+    } catch (err) {
+      return reply.code(502).send({ error: 'gmail_list_failed', detail: String(err).slice(0, 200) });
     }
   });
 };

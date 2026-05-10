@@ -33,6 +33,12 @@ type DriveFolder = {
   modifiedTime?: string;
 };
 
+type GmailLabel = {
+  id: string;
+  name: string;
+  type?: string;
+};
+
 const PROVIDER_LABEL: Record<Integration['provider'], string> = {
   google_drive: 'Google Drive',
   gmail: 'Gmail',
@@ -50,6 +56,8 @@ export default function IntegrationsPage() {
   const search = useSearchParams();
   const driveError = search.get('drive_error');
   const driveConnected = search.get('drive_connected');
+  const gmailError = search.get('gmail_error');
+  const gmailConnected = search.get('gmail_connected');
 
   const [integrations, setIntegrations] = useState<Integration[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -81,15 +89,17 @@ export default function IntegrationsPage() {
     if (current) void load();
   }, [current, load]);
 
-  const connectDrive = async () => {
-    setBusyProvider('google_drive');
+  const connectProvider = async (provider: 'drive' | 'gmail') => {
+    setBusyProvider(provider === 'drive' ? 'google_drive' : 'gmail');
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) throw new Error('not_authenticated');
       const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
       if (current) headers['X-MyCortex-Workspace-Id'] = current.id;
-      const res = await fetch(`${publicConfig.apiUrl}/integrations/drive/connect`, { headers });
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${provider}/connect`, {
+        headers,
+      });
       if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 200)}`);
       const { authUrl } = (await res.json()) as { authUrl: string };
       window.location.href = authUrl;
@@ -98,6 +108,8 @@ export default function IntegrationsPage() {
       setBusyProvider(null);
     }
   };
+  const connectDrive = () => connectProvider('drive');
+  const connectGmail = () => connectProvider('gmail');
 
   const disconnect = async (id: string) => {
     if (!confirm('¿Desconectar esta integración? Las notas ya importadas se quedan.')) return;
@@ -122,6 +134,7 @@ export default function IntegrationsPage() {
   };
 
   const drive = integrations?.find((i) => i.provider === 'google_drive');
+  const gmail = integrations?.find((i) => i.provider === 'gmail');
 
   return (
     <div className="page">
@@ -144,6 +157,22 @@ export default function IntegrationsPage() {
               No marcaste el permiso para acceder a tu Drive en la pantalla de
               Google. Click "Conectar Google Drive" de nuevo y asegurate de
               activar TODOS los permisos que pide.
+            </div>
+          )}
+        </div>
+      )}
+      {gmailConnected && (
+        <div className="alert alert-ok">
+          ✅ Gmail conectado como <strong>{gmailConnected}</strong>
+        </div>
+      )}
+      {gmailError && (
+        <div className="alert alert-err">
+          ❌ Error conectando Gmail: <code>{gmailError}</code>
+          {gmailError === 'missing_gmail_scope' && (
+            <div style={{ marginTop: 8, fontSize: 12 }}>
+              No marcaste el permiso para leer Gmail en la pantalla de Google.
+              Click "Conectar Gmail" de nuevo y activá los permisos.
             </div>
           )}
         </div>
@@ -201,15 +230,56 @@ export default function IntegrationsPage() {
         <DriveFolders integration={drive} workspaceId={current?.id ?? ''} />
       )}
 
-      <section className="card disabled">
+      <section className="card">
         <div className="head">
           <span className="provider-icon">{PROVIDER_ICON.gmail}</span>
           <div>
             <div className="provider-name">{PROVIDER_LABEL.gmail}</div>
-            <div className="provider-desc">Próximamente.</div>
+            <div className="provider-desc">
+              Indexa tus mails. INBOX por defecto, podés agregar otras labels. El
+              worker lee bodies, dedup por Message-ID y los hace consultables.
+            </div>
           </div>
         </div>
+
+        {loading ? (
+          <div className="muted">Cargando…</div>
+        ) : gmail ? (
+          <div className="connected">
+            <div>
+              <span
+                className={gmail.status === 'active' ? 'badge badge-ok' : 'badge badge-warn'}
+              >
+                {gmail.status}
+              </span>
+              <span className="email">
+                {gmail.external_account_email ?? '(cuenta desconocida)'}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busyProvider === gmail.id}
+              onClick={() => disconnect(gmail.id)}
+            >
+              {busyProvider === gmail.id ? '…' : 'Desconectar'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={connectGmail}
+            disabled={busyProvider === 'gmail'}
+          >
+            {busyProvider === 'gmail' ? '…' : 'Conectar Gmail'}
+          </button>
+        )}
       </section>
+
+      {gmail && gmail.status === 'active' && (
+        <GmailLabels integration={gmail} workspaceId={current?.id ?? ''} />
+      )}
 
       <section className="card disabled">
         <div className="head">
@@ -520,6 +590,349 @@ function DriveFolders({
                     disabled={busy === f.id}
                   >
                     📁 {f.name}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .folders-card {
+          background: #111;
+          border: 1px solid #1a1a1a;
+          border-radius: 12px;
+          padding: 18px;
+          margin-top: 12px;
+        }
+        .folders-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        h3 {
+          margin: 0;
+          color: #ddd;
+          font-size: 15px;
+          font-weight: 700;
+        }
+        .btn-add {
+          background: transparent;
+          border: 1px solid #333;
+          color: #ddd;
+          padding: 6px 12px;
+          border-radius: 8px;
+          font-size: 12px;
+          cursor: pointer;
+        }
+        .btn-add:hover {
+          border-color: #555;
+        }
+        .muted-line {
+          color: #888;
+          font-size: 13px;
+          padding: 8px 0;
+        }
+        .src-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .src-list li {
+          padding: 10px 12px;
+          border: 1px solid #1f1f2f;
+          border-radius: 8px;
+          display: grid;
+          grid-template-columns: 1fr auto;
+          gap: 4px 12px;
+        }
+        .src-name {
+          color: #fff;
+          font-size: 14px;
+          font-weight: 600;
+        }
+        .src-meta {
+          color: #888;
+          font-size: 11px;
+          grid-column: 1;
+        }
+        .src-rm {
+          background: transparent;
+          border: 1px solid #333;
+          color: #aaa;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+          grid-row: 1 / 3;
+          grid-column: 2;
+          align-self: center;
+        }
+        .src-rm:hover {
+          color: #ff9b9b;
+          border-color: #4a2a2a;
+        }
+        .folders-err {
+          color: #ff9b9b;
+          font-size: 12px;
+          margin-top: 10px;
+        }
+        .picker-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.65);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 100;
+        }
+        .picker {
+          background: #111;
+          border: 1px solid #2a2a2a;
+          border-radius: 12px;
+          padding: 18px;
+          width: 90%;
+          max-width: 480px;
+          max-height: 80vh;
+          display: flex;
+          flex-direction: column;
+        }
+        .picker-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 12px;
+        }
+        .picker h4 {
+          margin: 0;
+          color: #fff;
+          font-size: 16px;
+        }
+        .picker-close {
+          background: transparent;
+          border: none;
+          color: #888;
+          font-size: 18px;
+          cursor: pointer;
+        }
+        .picker-search {
+          background: #0a0a0a;
+          border: 1px solid #2a2a2a;
+          color: #fff;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          margin-bottom: 8px;
+          outline: none;
+        }
+        .picker-list {
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 4px;
+        }
+        .picker-item {
+          background: transparent;
+          border: 1px solid transparent;
+          color: #ddd;
+          text-align: left;
+          padding: 10px 12px;
+          border-radius: 8px;
+          font-size: 14px;
+          cursor: pointer;
+        }
+        .picker-item:hover {
+          background: #1a1a2a;
+          border-color: #2a2a3a;
+        }
+      `}</style>
+    </section>
+  );
+}
+
+function GmailLabels({
+  integration,
+  workspaceId,
+}: {
+  integration: Integration;
+  workspaceId: string;
+}) {
+  const [sources, setSources] = useState<SyncSource[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [labels, setLabels] = useState<GmailLabel[] | null>(null);
+  const [labelQuery, setLabelQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const headers = useCallback(async (): Promise<Record<string, string>> => {
+    const { data: sess } = await supabase.auth.getSession();
+    const t = sess.session?.access_token;
+    if (!t) throw new Error('not_authenticated');
+    const h: Record<string, string> = { Authorization: `Bearer ${t}` };
+    if (workspaceId) h['X-MyCortex-Workspace-Id'] = workspaceId;
+    return h;
+  }, [workspaceId]);
+
+  const loadSources = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources`, { headers: h });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      const json = (await res.json()) as { sources: SyncSource[] };
+      setSources(json.sources);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [headers, integration.id]);
+
+  useEffect(() => {
+    void loadSources();
+  }, [loadSources]);
+
+  const openPicker = async () => {
+    setPickerOpen(true);
+    setLabels(null);
+    setErr(null);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/labels`, { headers: h });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      const json = (await res.json()) as { labels: GmailLabel[] };
+      // Hide system labels that are useless for indexing (CHAT, CATEGORY_*, SPAM, TRASH).
+      const filtered = json.labels.filter(
+        (l) => !/^(CHAT|CATEGORY_|SPAM|TRASH|UNREAD|STARRED|IMPORTANT|DRAFT)/.test(l.id),
+      );
+      setLabels(filtered);
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const addLabel = async (label: GmailLabel) => {
+    setBusy(label.id);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources`, {
+        method: 'POST',
+        headers: { ...h, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ externalId: label.id, displayName: label.name }),
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      await loadSources();
+      setPickerOpen(false);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const removeSource = async (id: string) => {
+    if (!confirm('¿Quitar esta label? Los mails ya importados se quedan.')) return;
+    setBusy(id);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources/${id}`, {
+        method: 'DELETE',
+        headers: h,
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      await loadSources();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const filteredLabels = (labels ?? []).filter((l) =>
+    labelQuery.trim() === '' ? true : l.name.toLowerCase().includes(labelQuery.toLowerCase()),
+  );
+
+  return (
+    <section className="folders-card">
+      <div className="folders-head">
+        <h3>Labels sincronizadas</h3>
+        <button type="button" className="btn-add" onClick={openPicker} disabled={busy !== null}>
+          + Agregar label
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="muted-line">Cargando…</div>
+      ) : !sources || sources.length === 0 ? (
+        <div className="muted-line">
+          Aún no hay labels activas. Por defecto se agrega INBOX al conectar.
+        </div>
+      ) : (
+        <ul className="src-list">
+          {sources.map((s) => (
+            <li key={s.id}>
+              <div className="src-name">📧 {s.display_name}</div>
+              <div className="src-meta">
+                {s.status === 'active' ? '✓' : s.status === 'error' ? '⚠' : '⏸'} {s.status}
+                {' · '}
+                {s.items_synced} mails
+                {s.last_synced_at &&
+                  ` · sync ${new Date(s.last_synced_at).toLocaleString()}`}
+                {s.last_error && ` · ${s.last_error.slice(0, 60)}`}
+              </div>
+              <button
+                type="button"
+                className="src-rm"
+                onClick={() => removeSource(s.id)}
+                disabled={busy === s.id}
+              >
+                Quitar
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {err && <div className="folders-err">{err}</div>}
+
+      {pickerOpen && (
+        <div className="picker-backdrop" onClick={() => setPickerOpen(false)}>
+          <div className="picker" onClick={(e) => e.stopPropagation()}>
+            <div className="picker-head">
+              <h4>Elegí una label</h4>
+              <button type="button" className="picker-close" onClick={() => setPickerOpen(false)}>
+                ✕
+              </button>
+            </div>
+            <input
+              className="picker-search"
+              placeholder="Buscar label…"
+              value={labelQuery}
+              onChange={(e) => setLabelQuery(e.target.value)}
+              autoFocus
+            />
+            <div className="picker-list">
+              {labels === null ? (
+                <div className="muted-line">Cargando labels…</div>
+              ) : filteredLabels.length === 0 ? (
+                <div className="muted-line">Sin resultados.</div>
+              ) : (
+                filteredLabels.map((l) => (
+                  <button
+                    key={l.id}
+                    type="button"
+                    className="picker-item"
+                    onClick={() => addLabel(l)}
+                    disabled={busy === l.id}
+                  >
+                    📧 {l.name}
                   </button>
                 ))
               )}

@@ -22,10 +22,12 @@ const EnvSchema = z.object({
   TAVILY_API_KEY: optKey,
 
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
-  // disable themselves if these aren't configured.
+  // disable themselves if these aren't configured. Each provider has its
+  // own redirect URI registered in Google Cloud Console.
   GOOGLE_OAUTH_CLIENT_ID: optKey,
   GOOGLE_OAUTH_CLIENT_SECRET: optKey,
-  GOOGLE_OAUTH_REDIRECT_URI: optKey,
+  GOOGLE_OAUTH_REDIRECT_URI: optKey,         // Drive callback URI
+  GMAIL_OAUTH_REDIRECT_URI: optKey,          // Gmail callback URI
 
   // Where to redirect the user back to after OAuth (the web app).
   // Defaults to the Vercel prod URL.
