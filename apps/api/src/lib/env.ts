@@ -29,6 +29,7 @@ const EnvSchema = z.object({
   GOOGLE_OAUTH_CLIENT_SECRET: optKey,
   GOOGLE_OAUTH_REDIRECT_URI: optKey,         // Drive callback URI
   GMAIL_OAUTH_REDIRECT_URI: optKey,          // Gmail callback URI
+  CALENDAR_OAUTH_REDIRECT_URI: optKey,       // Calendar callback URI
 
   // Where to redirect the user back to after OAuth (the web app).
   // Defaults to the Vercel prod URL.

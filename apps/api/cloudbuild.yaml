@@ -32,6 +32,7 @@ substitutions:
   _WEB_BASE_URL: 'https://my-cortex-web-gxoh.vercel.app'
   _GOOGLE_OAUTH_REDIRECT_URI: 'https://mycortex-api-v5e3u7loza-ue.a.run.app/integrations/drive/callback'
   _GMAIL_OAUTH_REDIRECT_URI: 'https://mycortex-api-v5e3u7loza-ue.a.run.app/integrations/gmail/callback'
+  _CALENDAR_OAUTH_REDIRECT_URI: 'https://mycortex-api-v5e3u7loza-ue.a.run.app/integrations/calendar/callback'
 
 steps:
   # 1. Build the image
@@ -77,7 +78,7 @@ steps:
       - --concurrency=80
       - --timeout=60s
       - --service-account=mycortex-api-sa@$PROJECT_ID.iam.gserviceaccount.com
-      - --set-env-vars=^|^NODE_ENV=production|LOG_LEVEL=info|SUPABASE_URL=${_SUPABASE_URL}|SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}|WEB_BASE_URL=${_WEB_BASE_URL}|GOOGLE_OAUTH_REDIRECT_URI=${_GOOGLE_OAUTH_REDIRECT_URI}|GMAIL_OAUTH_REDIRECT_URI=${_GMAIL_OAUTH_REDIRECT_URI}
+      - --set-env-vars=^|^NODE_ENV=production|LOG_LEVEL=info|SUPABASE_URL=${_SUPABASE_URL}|SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}|WEB_BASE_URL=${_WEB_BASE_URL}|GOOGLE_OAUTH_REDIRECT_URI=${_GOOGLE_OAUTH_REDIRECT_URI}|GMAIL_OAUTH_REDIRECT_URI=${_GMAIL_OAUTH_REDIRECT_URI}|CALENDAR_OAUTH_REDIRECT_URI=${_CALENDAR_OAUTH_REDIRECT_URI}
       - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,TAVILY_API_KEY=mycortex-tavily:latest,GOOGLE_OAUTH_CLIENT_ID=mycortex-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=mycortex-google-oauth-client-secret:latest,COHERE_API_KEY=mycortex-cohere:latest
 
 images:

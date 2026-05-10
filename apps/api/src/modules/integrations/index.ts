@@ -17,6 +17,13 @@ import {
   listLabels,
   refreshAccessToken as refreshGmailToken,
 } from './gmail.js';
+import {
+  buildAuthUrl as buildCalendarAuthUrl,
+  exchangeCode as exchangeCalendarCode,
+  fetchUserInfo as fetchCalendarUserInfo,
+  listCalendars,
+  refreshAccessToken as refreshCalendarToken,
+} from './calendar.js';
 import { signState, verifyState } from './oauth-shared.js';
 import type { IntegrationProvider, IntegrationRow } from '@mycortex/db/types';
 
@@ -62,12 +69,15 @@ async function ensureFreshToken(integration: IntegrationRow): Promise<string> {
   if (!integration.refresh_token) {
     throw new Error('token_expired_no_refresh');
   }
-  // Both Drive and Gmail use Google's identical refresh endpoint, but we
-  // route via the provider helper so future non-Google providers can plug in.
+  // Drive, Gmail, and Calendar all use Google's identical refresh endpoint,
+  // but we route via the provider helper so future non-Google providers
+  // (Notion, Slack) can plug in.
   const refreshed =
     integration.provider === 'gmail'
       ? await refreshGmailToken(integration.refresh_token)
-      : await refreshDriveToken(integration.refresh_token);
+      : integration.provider === 'google_calendar'
+        ? await refreshCalendarToken(integration.refresh_token)
+        : await refreshDriveToken(integration.refresh_token);
   const newExpiresAt = new Date(now + refreshed.expires_in * 1000).toISOString();
   await getDb()
     .from('integrations')
@@ -483,6 +493,158 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       return reply.code(200).send({ labels });
     } catch (err) {
       return reply.code(502).send({ error: 'gmail_list_failed', detail: String(err).slice(0, 200) });
+    }
+  });
+
+  // ---- GET /integrations/calendar/connect --------------------------------
+  server.get('/calendar/connect', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const env = getEnv();
+    if (
+      !env.GOOGLE_OAUTH_CLIENT_ID ||
+      !env.GOOGLE_OAUTH_CLIENT_SECRET ||
+      !env.CALENDAR_OAUTH_REDIRECT_URI
+    ) {
+      return reply.code(503).send({ error: 'calendar_oauth_not_configured' });
+    }
+    const state = signState({
+      workspaceId: auth.workspaceId,
+      userId: auth.userId,
+      nonce: Math.random().toString(36).slice(2),
+    });
+    const authUrl = buildCalendarAuthUrl(state);
+    return reply.code(200).send({ authUrl });
+  });
+
+  // ---- GET /integrations/calendar/callback -------------------------------
+  server.get('/calendar/callback', async (req, reply) => {
+    const env = getEnv();
+    const QuerySchema = z.object({
+      code: z.string().optional(),
+      error: z.string().optional(),
+      state: z.string().optional(),
+    });
+    const q = QuerySchema.parse(req.query);
+    const back = `${env.WEB_BASE_URL}/app/settings/integrations`;
+
+    if (q.error) {
+      return reply.redirect(`${back}?calendar_error=${encodeURIComponent(q.error)}`);
+    }
+    if (!q.code || !q.state) {
+      return reply.redirect(`${back}?calendar_error=missing_code_or_state`);
+    }
+
+    let stateData;
+    try {
+      stateData = verifyState(q.state);
+    } catch (err) {
+      req.log.warn({ err: String(err) }, 'calendar_state_invalid');
+      return reply.redirect(`${back}?calendar_error=invalid_state`);
+    }
+
+    let tokens;
+    try {
+      tokens = await exchangeCalendarCode(q.code);
+    } catch (err) {
+      req.log.error({ err: String(err) }, 'calendar_token_exchange_failed');
+      return reply.redirect(`${back}?calendar_error=token_exchange_failed`);
+    }
+
+    const grantedScopes = new Set(tokens.scope.split(/\s+/).filter(Boolean));
+    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.readonly')) {
+      req.log.warn({ scope: tokens.scope }, 'calendar_scope_missing_readonly');
+      return reply.redirect(
+        `${back}?calendar_error=missing_calendar_scope&granted=${encodeURIComponent(tokens.scope)}`,
+      );
+    }
+
+    let userInfo;
+    try {
+      userInfo = await fetchCalendarUserInfo(tokens.access_token);
+    } catch (err) {
+      req.log.error({ err: String(err) }, 'calendar_userinfo_failed');
+      return reply.redirect(`${back}?calendar_error=userinfo_failed`);
+    }
+
+    const expiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
+
+    const { data: integrationRow, error: upsertErr } = await getDb()
+      .from('integrations')
+      .upsert(
+        {
+          workspace_id: stateData.workspaceId,
+          user_id: stateData.userId,
+          provider: 'google_calendar',
+          status: 'active',
+          access_token: tokens.access_token,
+          refresh_token: tokens.refresh_token ?? null,
+          token_expires_at: expiresAt,
+          scope: tokens.scope,
+          external_account_email: userInfo.email,
+          external_account_id: userInfo.id,
+          metadata: { name: userInfo.name ?? null, picture: userInfo.picture ?? null },
+          last_error: null,
+        },
+        { onConflict: 'workspace_id,provider,external_account_id' },
+      )
+      .select()
+      .single();
+    if (upsertErr || !integrationRow) {
+      req.log.error({ err: upsertErr?.message }, 'calendar_save_integration_failed');
+      return reply.redirect(`${back}?calendar_error=save_failed`);
+    }
+
+    // Auto-create a default sync source: the primary calendar. The "primary"
+    // alias is special — it always resolves to the user's main calendar.
+    await getDb()
+      .from('sync_sources')
+      .upsert(
+        {
+          integration_id: integrationRow.id,
+          workspace_id: stateData.workspaceId,
+          external_id: 'primary',
+          display_name: `${userInfo.email} (primary)`,
+          status: 'active',
+        },
+        { onConflict: 'integration_id,external_id' },
+      );
+
+    return reply.redirect(`${back}?calendar_connected=${encodeURIComponent(userInfo.email)}`);
+  });
+
+  // ---- GET /integrations/:id/calendars -----------------------------------
+  // List the user's calendars so they can pick which to sync. (Mirrors
+  // /:id/folders for Drive / /:id/labels for Gmail.)
+  server.get('/:id/calendars', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z.object({ id: z.string().uuid() }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+
+    const { data: integration, error } = await getDb()
+      .from('integrations')
+      .select('*')
+      .eq('id', params.data.id)
+      .eq('workspace_id', auth.workspaceId)
+      .maybeSingle();
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    if (!integration) return reply.code(404).send({ error: 'integration_not_found' });
+    if (integration.provider !== 'google_calendar')
+      return reply.code(400).send({ error: 'wrong_provider' });
+
+    let token: string;
+    try {
+      token = await ensureFreshToken(integration);
+    } catch (err) {
+      return reply.code(401).send({ error: 'token_refresh_failed', detail: String(err).slice(0, 120) });
+    }
+
+    try {
+      const calendars = await listCalendars(token);
+      return reply.code(200).send({ calendars });
+    } catch (err) {
+      return reply.code(502).send({ error: 'calendar_list_failed', detail: String(err).slice(0, 200) });
     }
   });
 };

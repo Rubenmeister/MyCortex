@@ -3,7 +3,16 @@
 
 export type NodeKind = 'note' | 'task' | 'idea' | 'reference' | 'fragment';
 export type NodeCategory = 'going' | 'personal' | 'urgent' | 'unknown';
-export type IngestSource = 'telegram' | 'mobile' | 'web' | 'api' | 'drive' | 'gmail';
+export type IngestSource =
+  | 'telegram'
+  | 'mobile'
+  | 'web'
+  | 'api'
+  | 'drive'
+  | 'gmail'
+  | 'calendar'
+  | 'notion'
+  | 'slack';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
@@ -159,7 +168,12 @@ export type EvolutionActionUpdate = Partial<
 
 // ---- Integrations ------------------------------------------------------
 
-export type IntegrationProvider = 'google_drive' | 'gmail' | 'notion';
+export type IntegrationProvider =
+  | 'google_drive'
+  | 'gmail'
+  | 'google_calendar'
+  | 'notion'
+  | 'slack';
 export type IntegrationStatus = 'active' | 'revoked' | 'error';
 
 export type IntegrationRow = {

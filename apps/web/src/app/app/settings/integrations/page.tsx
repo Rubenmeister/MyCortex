@@ -8,7 +8,7 @@ import { useWorkspace } from '../../../../lib/workspace';
 
 type Integration = {
   id: string;
-  provider: 'google_drive' | 'gmail' | 'notion';
+  provider: 'google_drive' | 'gmail' | 'google_calendar' | 'notion' | 'slack';
   status: 'active' | 'revoked' | 'error';
   external_account_email: string | null;
   scope: string | null;
@@ -39,16 +39,28 @@ type GmailLabel = {
   type?: string;
 };
 
+type GCalendar = {
+  id: string;
+  summary?: string;
+  description?: string;
+  primary?: boolean;
+  accessRole?: string;
+};
+
 const PROVIDER_LABEL: Record<Integration['provider'], string> = {
   google_drive: 'Google Drive',
   gmail: 'Gmail',
+  google_calendar: 'Google Calendar',
   notion: 'Notion',
+  slack: 'Slack',
 };
 
 const PROVIDER_ICON: Record<Integration['provider'], string> = {
   google_drive: '📁',
   gmail: '📧',
+  google_calendar: '📅',
   notion: '📝',
+  slack: '💬',
 };
 
 export default function IntegrationsPage() {
@@ -58,6 +70,8 @@ export default function IntegrationsPage() {
   const driveConnected = search.get('drive_connected');
   const gmailError = search.get('gmail_error');
   const gmailConnected = search.get('gmail_connected');
+  const calendarError = search.get('calendar_error');
+  const calendarConnected = search.get('calendar_connected');
 
   const [integrations, setIntegrations] = useState<Integration[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,8 +103,14 @@ export default function IntegrationsPage() {
     if (current) void load();
   }, [current, load]);
 
-  const connectProvider = async (provider: 'drive' | 'gmail') => {
-    setBusyProvider(provider === 'drive' ? 'google_drive' : 'gmail');
+  const connectProvider = async (provider: 'drive' | 'gmail' | 'calendar') => {
+    setBusyProvider(
+      provider === 'drive'
+        ? 'google_drive'
+        : provider === 'gmail'
+          ? 'gmail'
+          : 'google_calendar',
+    );
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
@@ -110,6 +130,7 @@ export default function IntegrationsPage() {
   };
   const connectDrive = () => connectProvider('drive');
   const connectGmail = () => connectProvider('gmail');
+  const connectCalendar = () => connectProvider('calendar');
 
   const disconnect = async (id: string) => {
     if (!confirm('¿Desconectar esta integración? Las notas ya importadas se quedan.')) return;
@@ -135,6 +156,7 @@ export default function IntegrationsPage() {
 
   const drive = integrations?.find((i) => i.provider === 'google_drive');
   const gmail = integrations?.find((i) => i.provider === 'gmail');
+  const calendar = integrations?.find((i) => i.provider === 'google_calendar');
 
   return (
     <div className="page">
@@ -173,6 +195,22 @@ export default function IntegrationsPage() {
             <div style={{ marginTop: 8, fontSize: 12 }}>
               No marcaste el permiso para leer Gmail en la pantalla de Google.
               Click "Conectar Gmail" de nuevo y activá los permisos.
+            </div>
+          )}
+        </div>
+      )}
+      {calendarConnected && (
+        <div className="alert alert-ok">
+          ✅ Calendar conectado como <strong>{calendarConnected}</strong>
+        </div>
+      )}
+      {calendarError && (
+        <div className="alert alert-err">
+          ❌ Error conectando Calendar: <code>{calendarError}</code>
+          {calendarError === 'missing_calendar_scope' && (
+            <div style={{ marginTop: 8, fontSize: 12 }}>
+              No marcaste el permiso para leer Calendar en la pantalla de Google.
+              Reconectá y activá los permisos.
             </div>
           )}
         </div>
@@ -279,6 +317,57 @@ export default function IntegrationsPage() {
 
       {gmail && gmail.status === 'active' && (
         <GmailLabels integration={gmail} workspaceId={current?.id ?? ''} />
+      )}
+
+      <section className="card">
+        <div className="head">
+          <span className="provider-icon">{PROVIDER_ICON.google_calendar}</span>
+          <div>
+            <div className="provider-name">{PROVIDER_LABEL.google_calendar}</div>
+            <div className="provider-desc">
+              Indexa tus eventos (pasado + próximos meses). Reuniones, asistentes,
+              ubicación — todo se vuelve buscable. "¿Qué dije en la reunión con X?"
+            </div>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="muted">Cargando…</div>
+        ) : calendar ? (
+          <div className="connected">
+            <div>
+              <span
+                className={calendar.status === 'active' ? 'badge badge-ok' : 'badge badge-warn'}
+              >
+                {calendar.status}
+              </span>
+              <span className="email">
+                {calendar.external_account_email ?? '(cuenta desconocida)'}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              disabled={busyProvider === calendar.id}
+              onClick={() => disconnect(calendar.id)}
+            >
+              {busyProvider === calendar.id ? '…' : 'Desconectar'}
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={connectCalendar}
+            disabled={busyProvider === 'google_calendar'}
+          >
+            {busyProvider === 'google_calendar' ? '…' : 'Conectar Calendar'}
+          </button>
+        )}
+      </section>
+
+      {calendar && calendar.status === 'active' && (
+        <CalendarsList integration={calendar} workspaceId={current?.id ?? ''} />
       )}
 
       <section className="card disabled">
@@ -1093,6 +1182,220 @@ function GmailLabels({
           background: #1a1a2a;
           border-color: #2a2a3a;
         }
+      `}</style>
+    </section>
+  );
+}
+
+function CalendarsList({
+  integration,
+  workspaceId,
+}: {
+  integration: Integration;
+  workspaceId: string;
+}) {
+  const [sources, setSources] = useState<SyncSource[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [calendars, setCalendars] = useState<GCalendar[] | null>(null);
+  const [calendarQuery, setCalendarQuery] = useState('');
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const headers = useCallback(async (): Promise<Record<string, string>> => {
+    const { data: sess } = await supabase.auth.getSession();
+    const t = sess.session?.access_token;
+    if (!t) throw new Error('not_authenticated');
+    const h: Record<string, string> = { Authorization: `Bearer ${t}` };
+    if (workspaceId) h['X-MyCortex-Workspace-Id'] = workspaceId;
+    return h;
+  }, [workspaceId]);
+
+  const loadSources = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources`, { headers: h });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      const json = (await res.json()) as { sources: SyncSource[] };
+      setSources(json.sources);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, [headers, integration.id]);
+
+  useEffect(() => {
+    void loadSources();
+  }, [loadSources]);
+
+  const openPicker = async () => {
+    setPickerOpen(true);
+    setCalendars(null);
+    setErr(null);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/calendars`, { headers: h });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      const json = (await res.json()) as { calendars: GCalendar[] };
+      setCalendars(json.calendars);
+    } catch (e) {
+      setErr(String(e));
+    }
+  };
+
+  const addCalendar = async (cal: GCalendar) => {
+    setBusy(cal.id);
+    try {
+      const h = await headers();
+      const name = cal.primary
+        ? `${cal.summary ?? cal.id} (primary)`
+        : (cal.summary ?? cal.id);
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources`, {
+        method: 'POST',
+        headers: { ...h, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ externalId: cal.id, displayName: name }),
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      await loadSources();
+      setPickerOpen(false);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const removeSource = async (id: string) => {
+    if (!confirm('¿Quitar este calendario? Los eventos ya importados se quedan.')) return;
+    setBusy(id);
+    try {
+      const h = await headers();
+      const res = await fetch(`${publicConfig.apiUrl}/integrations/${integration.id}/sources/${id}`, {
+        method: 'DELETE',
+        headers: h,
+      });
+      if (!res.ok) throw new Error(`${res.status}: ${(await res.text()).slice(0, 160)}`);
+      await loadSources();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const filteredCalendars = (calendars ?? []).filter((c) =>
+    calendarQuery.trim() === ''
+      ? true
+      : (c.summary ?? c.id).toLowerCase().includes(calendarQuery.toLowerCase()),
+  );
+
+  return (
+    <section className="folders-card">
+      <div className="folders-head">
+        <h3>Calendarios sincronizados</h3>
+        <button type="button" className="btn-add" onClick={openPicker} disabled={busy !== null}>
+          + Agregar calendario
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="muted-line">Cargando…</div>
+      ) : !sources || sources.length === 0 ? (
+        <div className="muted-line">
+          Aún no hay calendarios activos. Por defecto se agrega &quot;primary&quot; al conectar.
+        </div>
+      ) : (
+        <ul className="src-list">
+          {sources.map((s) => (
+            <li key={s.id}>
+              <div className="src-name">📅 {s.display_name}</div>
+              <div className="src-meta">
+                {s.status === 'active' ? '✓' : s.status === 'error' ? '⚠' : '⏸'} {s.status}
+                {' · '}
+                {s.items_synced} eventos
+                {s.last_synced_at && ` · sync ${new Date(s.last_synced_at).toLocaleString()}`}
+                {s.last_error && ` · ${s.last_error.slice(0, 60)}`}
+              </div>
+              <button
+                type="button"
+                className="src-rm"
+                onClick={() => removeSource(s.id)}
+                disabled={busy === s.id}
+              >
+                Quitar
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {err && <div className="folders-err">{err}</div>}
+
+      {pickerOpen && (
+        <div className="picker-backdrop" onClick={() => setPickerOpen(false)}>
+          <div className="picker" onClick={(e) => e.stopPropagation()}>
+            <div className="picker-head">
+              <h4>Elegí un calendario</h4>
+              <button type="button" className="picker-close" onClick={() => setPickerOpen(false)}>
+                ✕
+              </button>
+            </div>
+            <input
+              className="picker-search"
+              placeholder="Buscar calendario…"
+              value={calendarQuery}
+              onChange={(e) => setCalendarQuery(e.target.value)}
+              autoFocus
+            />
+            <div className="picker-list">
+              {calendars === null ? (
+                <div className="muted-line">Cargando calendarios…</div>
+              ) : filteredCalendars.length === 0 ? (
+                <div className="muted-line">Sin resultados.</div>
+              ) : (
+                filteredCalendars.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="picker-item"
+                    onClick={() => addCalendar(c)}
+                    disabled={busy === c.id}
+                  >
+                    📅 {c.primary ? `${c.summary ?? c.id} (primary)` : (c.summary ?? c.id)}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .folders-card { background: #111; border: 1px solid #1a1a1a; border-radius: 12px; padding: 18px; margin-top: 12px; }
+        .folders-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        h3 { margin: 0; color: #ddd; font-size: 15px; font-weight: 700; }
+        .btn-add { background: transparent; border: 1px solid #333; color: #ddd; padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer; }
+        .btn-add:hover { border-color: #555; }
+        .muted-line { color: #888; font-size: 13px; padding: 8px 0; }
+        .src-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+        .src-list li { padding: 10px 12px; border: 1px solid #1f1f2f; border-radius: 8px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; }
+        .src-name { color: #fff; font-size: 14px; font-weight: 600; }
+        .src-meta { color: #888; font-size: 11px; grid-column: 1; }
+        .src-rm { background: transparent; border: 1px solid #333; color: #aaa; padding: 4px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; grid-row: 1 / 3; grid-column: 2; align-self: center; }
+        .src-rm:hover { color: #ff9b9b; border-color: #4a2a2a; }
+        .folders-err { color: #ff9b9b; font-size: 12px; margin-top: 10px; }
+        .picker-backdrop { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); display: flex; align-items: center; justify-content: center; z-index: 100; }
+        .picker { background: #111; border: 1px solid #2a2a2a; border-radius: 12px; padding: 18px; width: 90%; max-width: 480px; max-height: 80vh; display: flex; flex-direction: column; }
+        .picker-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .picker h4 { margin: 0; color: #fff; font-size: 16px; }
+        .picker-close { background: transparent; border: none; color: #888; font-size: 18px; cursor: pointer; }
+        .picker-search { background: #0a0a0a; border: 1px solid #2a2a2a; color: #fff; padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; outline: none; }
+        .picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+        .picker-item { background: transparent; border: 1px solid transparent; color: #ddd; text-align: left; padding: 10px 12px; border-radius: 8px; font-size: 14px; cursor: pointer; }
+        .picker-item:hover { background: #1a1a2a; border-color: #2a2a3a; }
       `}</style>
     </section>
   );
