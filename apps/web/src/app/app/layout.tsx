@@ -10,6 +10,7 @@ import { WorkspaceSwitcher } from '../../components/WorkspaceSwitcher';
 const TABS = [
   { href: '/app/capture', label: 'Capturar', icon: '✎' },
   { href: '/app/ask', label: 'Preguntar', icon: '💬' },
+  { href: '/app/digest', label: 'Briefing', icon: '☀️' },
   { href: '/app/nodes', label: 'Notas', icon: '☰' },
   { href: '/app/settings', label: 'Ajustes', icon: '⚙' },
 ];

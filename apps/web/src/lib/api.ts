@@ -103,6 +103,32 @@ export type AskResult = {
   rewriteMs?: number;
 };
 
+export type DigestCounts = {
+  notes?: number;
+  mails?: number;
+  drive?: number;
+  calendar_today?: number;
+  calendar_upcoming?: number;
+};
+
+export type DailyDigest = {
+  id: string;
+  for_date: string;
+  summary: string;
+  sections: Array<{ title: string; body: string; node_ids?: string[] }>;
+  counts: DigestCounts;
+  metadata: Record<string, unknown>;
+  created_at: string;
+};
+
+export type DigestListItem = {
+  id: string;
+  for_date: string;
+  summary: string;
+  counts: DigestCounts;
+  created_at: string;
+};
+
 export type RecentNode = {
   id: string;
   kind: string;
@@ -160,6 +186,25 @@ export async function listRecent(limit = 20): Promise<RecentNode[]> {
   if (!res.ok) throw new Error(`list ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = (await res.json()) as { nodes: RecentNode[] };
   return json.nodes;
+}
+
+export async function getTodaysDigest(): Promise<DailyDigest | null> {
+  const res = await fetch(`${API_URL}/cortex/digest/today`, {
+    headers: await authHeaders(),
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`digest ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { digest: DailyDigest };
+  return json.digest;
+}
+
+export async function listDigests(limit = 14): Promise<DigestListItem[]> {
+  const res = await fetch(`${API_URL}/cortex/digest/list?limit=${limit}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`digest_list ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { digests: DigestListItem[] };
+  return json.digests;
 }
 
 // ---- Workspaces ---------------------------------------------------------

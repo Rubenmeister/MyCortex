@@ -50,4 +50,43 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
 
     return reply.code(200).send({ nodes: data ?? [] });
   });
+
+  /**
+   * Daily digest endpoints. The cortex-digest Cloud Run Job runs every
+   * morning and writes one row per workspace per date into daily_digests.
+   * /today returns the latest one; /list returns recent.
+   */
+  server.get('/digest/today', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+
+    const { data, error } = await auth.db
+      .from('daily_digests')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      .order('for_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    if (!data) return reply.code(404).send({ error: 'no_digest_yet' });
+    return reply.code(200).send({ digest: data });
+  });
+
+  server.get('/digest/list', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const q = z
+      .object({ limit: z.coerce.number().int().min(1).max(30).default(14) })
+      .safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    const { data, error } = await auth.db
+      .from('daily_digests')
+      .select('id, for_date, summary, counts, created_at')
+      .eq('workspace_id', auth.workspaceId)
+      .order('for_date', { ascending: false })
+      .limit(q.data.limit);
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ digests: data ?? [] });
+  });
 };

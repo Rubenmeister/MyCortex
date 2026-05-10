@@ -250,6 +250,53 @@ export type SyncSourceUpdate = Partial<
   Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
 >;
 
+// ---- Daily digests -----------------------------------------------------
+
+/**
+ * One row per workspace per day. Filled by the cortex-digest Cloud Run
+ * Job each morning. Renders in /app/digest and is the source for the
+ * Telegram push.
+ */
+export type DigestSection = {
+  /** Heading shown in the UI ("Tu día", "Mails importantes", "Próximos eventos"...). */
+  title: string;
+  /** Free-form markdown body (the LLM writes this). */
+  body: string;
+  /** Optional list of node ids the section references. */
+  node_ids?: string[];
+};
+
+export type DigestCounts = {
+  notes?: number;
+  mails?: number;
+  drive?: number;
+  calendar_today?: number;
+  calendar_upcoming?: number;
+};
+
+export type DailyDigestRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  for_date: string;
+  summary: string;
+  sections: DigestSection[];
+  counts: DigestCounts;
+  metadata: Json;
+  created_at: string;
+};
+
+export type DailyDigestInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  for_date: string;
+  summary: string;
+  sections?: DigestSection[];
+  counts?: DigestCounts;
+  metadata?: Json;
+};
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -295,6 +342,12 @@ export type Database = {
         Row: SyncSourceRow;
         Insert: SyncSourceInsert;
         Update: SyncSourceUpdate;
+        Relationships: [];
+      };
+      daily_digests: {
+        Row: DailyDigestRow;
+        Insert: DailyDigestInsert;
+        Update: Partial<DailyDigestInsert>;
         Relationships: [];
       };
     };
