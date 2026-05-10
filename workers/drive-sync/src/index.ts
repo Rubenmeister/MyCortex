@@ -190,9 +190,9 @@ async function syncSource(
     return stats;
   }
 
-  let files: DriveFile[];
+  let listing: { supported: DriveFile[]; mimeBreakdown: Record<string, number>; totalFiles: number };
   try {
-    files = await listFilesInFolder(accessToken, source.external_id, {
+    listing = await listFilesInFolder(accessToken, source.external_id, {
       maxFiles: cfg.DRIVE_SYNC_MAX_FILES_PER_FOLDER,
     });
   } catch (err) {
@@ -204,10 +204,13 @@ async function syncSource(
     workspaceId: source.workspace_id,
     sourceId: source.id,
     folder: source.display_name,
-    files: files.length,
+    folderId: source.external_id,
+    totalFiles: listing.totalFiles,
+    supportedFiles: listing.supported.length,
+    mimeBreakdown: listing.mimeBreakdown,
   });
 
-  for (const file of files) {
+  for (const file of listing.supported) {
     const result = await syncFile(db, {
       workspaceId: source.workspace_id,
       userId: integration.user_id,

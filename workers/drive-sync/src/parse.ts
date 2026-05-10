@@ -6,7 +6,11 @@ import pdfParse from 'pdf-parse';
  * string for unsupported types (caller decides whether to skip).
  */
 export async function extractText(buffer: Buffer, mimeType: string): Promise<string> {
-  if (mimeType === 'text/plain' || mimeType === 'text/markdown') {
+  if (
+    mimeType === 'text/plain' ||
+    mimeType === 'text/markdown' ||
+    mimeType === 'text/csv'
+  ) {
     return buffer.toString('utf8');
   }
   if (

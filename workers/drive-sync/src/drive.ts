@@ -51,19 +51,24 @@ const ListSchema = z.object({
 });
 
 /**
- * List all (non-folder) files inside a folder, recursively. Returns up to
- * `maxFiles` flat. We use a BFS over subfolders since Drive's q syntax
- * doesn't support recursive queries directly.
+ * List all (non-folder) files inside a folder, recursively. Returns supported
+ * files up to `maxFiles` flat, plus a breakdown of mime types encountered
+ * (incl. unsupported ones) so callers can log what got filtered out.
+ *
+ * BFS walks subfolders since Drive's q syntax doesn't support recursive.
+ * Includes Shared Drive items via supportsAllDrives + includeItemsFromAllDrives.
  */
 export async function listFilesInFolder(
   accessToken: string,
   folderId: string,
   opts: { maxFiles?: number } = {},
-): Promise<DriveFile[]> {
+): Promise<{ supported: DriveFile[]; mimeBreakdown: Record<string, number>; totalFiles: number }> {
   const maxFiles = opts.maxFiles ?? 200;
   const queue: string[] = [folderId];
   const seen = new Set<string>();
   const out: DriveFile[] = [];
+  const mimeBreakdown: Record<string, number> = {};
+  let totalFiles = 0;
 
   while (queue.length > 0 && out.length < maxFiles) {
     const current = queue.shift()!;
@@ -77,6 +82,8 @@ export async function listFilesInFolder(
         fields:
           'files(id,name,mimeType,modifiedTime,size,parents,md5Checksum),nextPageToken',
         pageSize: '100',
+        supportsAllDrives: 'true',
+        includeItemsFromAllDrives: 'true',
       });
       if (pageToken) params.set('pageToken', pageToken);
 
@@ -90,7 +97,11 @@ export async function listFilesInFolder(
       for (const f of json.files) {
         if (f.mimeType === 'application/vnd.google-apps.folder') {
           queue.push(f.id);
-        } else if (isSupportedMimeType(f.mimeType)) {
+          continue;
+        }
+        totalFiles++;
+        mimeBreakdown[f.mimeType] = (mimeBreakdown[f.mimeType] ?? 0) + 1;
+        if (isSupportedMimeType(f.mimeType)) {
           out.push(f);
           if (out.length >= maxFiles) break;
         }
@@ -98,7 +109,7 @@ export async function listFilesInFolder(
       pageToken = json.nextPageToken;
     } while (pageToken && out.length < maxFiles);
   }
-  return out;
+  return { supported: out, mimeBreakdown, totalFiles };
 }
 
 const SUPPORTED_MIME = new Set([
@@ -106,7 +117,10 @@ const SUPPORTED_MIME = new Set([
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // .docx
   'text/plain',
   'text/markdown',
+  'text/csv',
   'application/vnd.google-apps.document', // Google Docs (export as text/plain)
+  'application/vnd.google-apps.presentation', // Google Slides (export as text/plain)
+  'application/vnd.google-apps.spreadsheet', // Google Sheets (export as text/csv)
 ]);
 
 export function isSupportedMimeType(mimeType: string): boolean {
@@ -123,19 +137,29 @@ export async function downloadFile(
 ): Promise<{ buffer: Buffer; mimeType: string }> {
   const headers = { Authorization: `Bearer ${accessToken}` };
 
-  if (file.mimeType === 'application/vnd.google-apps.document') {
-    const url = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=text/plain`;
+  // Google-native types must be exported (the file isn't a downloadable blob).
+  // We pick the cheapest text representation per type:
+  //   Docs/Slides → text/plain (extracts visible text)
+  //   Sheets       → text/csv  (first sheet only — this is a Drive limitation)
+  const exportMap: Record<string, string> = {
+    'application/vnd.google-apps.document': 'text/plain',
+    'application/vnd.google-apps.presentation': 'text/plain',
+    'application/vnd.google-apps.spreadsheet': 'text/csv',
+  };
+  const exportMime = exportMap[file.mimeType];
+  if (exportMime) {
+    const url = `https://www.googleapis.com/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exportMime)}&supportsAllDrives=true`;
     const res = await fetch(url, { headers });
     if (!res.ok) {
-      throw new Error(`drive_export_failed: ${res.status}`);
+      throw new Error(`drive_export_failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
     }
-    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: 'text/plain' };
+    return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: exportMime };
   }
 
-  const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`;
+  const url = `https://www.googleapis.com/drive/v3/files/${file.id}?alt=media&supportsAllDrives=true`;
   const res = await fetch(url, { headers });
   if (!res.ok) {
-    throw new Error(`drive_download_failed: ${res.status}`);
+    throw new Error(`drive_download_failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
   }
   return { buffer: Buffer.from(await res.arrayBuffer()), mimeType: file.mimeType };
 }
