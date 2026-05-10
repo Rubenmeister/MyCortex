@@ -551,11 +551,24 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       return reply.redirect(`${back}?calendar_error=token_exchange_failed`);
     }
 
+    // Granular consent: we need BOTH calendarlist + events readonly scopes to
+    // actually be able to enumerate calendars AND read their events. Either
+    // one alone is useless.
     const grantedScopes = new Set(tokens.scope.split(/\s+/).filter(Boolean));
-    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.readonly')) {
-      req.log.warn({ scope: tokens.scope }, 'calendar_scope_missing_readonly');
+    const missingScopes: string[] = [];
+    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.calendarlist.readonly')) {
+      missingScopes.push('calendar.calendarlist.readonly');
+    }
+    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.events.readonly')) {
+      missingScopes.push('calendar.events.readonly');
+    }
+    if (missingScopes.length > 0) {
+      req.log.warn(
+        { scope: tokens.scope, missing: missingScopes },
+        'calendar_scope_missing',
+      );
       return reply.redirect(
-        `${back}?calendar_error=missing_calendar_scope&granted=${encodeURIComponent(tokens.scope)}`,
+        `${back}?calendar_error=missing_calendar_scope&granted=${encodeURIComponent(tokens.scope)}&missing=${encodeURIComponent(missingScopes.join(','))}`,
       );
     }
 
