@@ -32,10 +32,15 @@ const AUDIO_BODY = z.object({
 const AskBodySchema = z.union([TEXT_BODY, AUDIO_BODY]);
 
 // Below this similarity, we consider the user's notes weak enough to reach
-// for live web search. Calibrated against text-embedding-3-small: related
-// notes typically score 0.45-0.65, so 0.55 means "clearly on-topic notes
-// keep us off the web; merely-correlated notes trigger the supplement".
-const WEB_FALLBACK_SIMILARITY = 0.55;
+// for live web search. Calibrated against text-embedding-3-small: a single
+// note that incidentally shares a keyword with the question (e.g. a "hola
+// desde Quito" capture matching a "clima en Quito" query) easily scores
+// 0.55-0.65 even when it answers nothing. We need a threshold that
+// distinguishes "this note IS the answer" from "this note shares a word".
+// 0.70 is empirical: clearly on-topic notes about a topic the user took
+// real notes on (e.g. their Madrid trip planning) score 0.70+; incidental
+// keyword overlaps stay below.
+const WEB_FALLBACK_SIMILARITY = 0.7;
 
 const SYSTEM_PROMPT_NOTES_ONLY = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro.
 
