@@ -274,11 +274,14 @@ export type DigestCounts = {
   calendar_upcoming?: number;
 };
 
+export type DigestKind = 'daily' | 'weekly';
+
 export type DailyDigestRow = {
   id: string;
   workspace_id: string;
   user_id: string;
   for_date: string;
+  kind: DigestKind;
   summary: string;
   sections: DigestSection[];
   counts: DigestCounts;
@@ -291,6 +294,7 @@ export type DailyDigestInsert = {
   workspace_id: string;
   user_id: string;
   for_date: string;
+  kind?: DigestKind;
   summary: string;
   sections?: DigestSection[];
   counts?: DigestCounts;

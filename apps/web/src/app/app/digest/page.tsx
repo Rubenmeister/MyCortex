@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  getLatestWeekly,
   getTodaysDigest,
   listDigests,
   type DailyDigest,
@@ -85,6 +86,7 @@ function MarkdownLite({ text }: { text: string }) {
 export default function DigestPage() {
   const { current } = useWorkspace();
   const [today, setToday] = useState<DailyDigest | null>(null);
+  const [weekly, setWeekly] = useState<DailyDigest | null>(null);
   const [history, setHistory] = useState<DigestListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +95,13 @@ export default function DigestPage() {
     setLoading(true);
     setError(null);
     try {
-      const [t, h] = await Promise.all([getTodaysDigest(), listDigests(14)]);
+      const [t, w, h] = await Promise.all([
+        getTodaysDigest(),
+        getLatestWeekly(),
+        listDigests(14),
+      ]);
       setToday(t);
+      setWeekly(w);
       setHistory(h);
     } catch (err) {
       setError(String(err));
@@ -147,8 +154,41 @@ export default function DigestPage() {
         <section className="card empty">
           <div className="empty-title">Aún no hay briefing para hoy.</div>
           <div className="empty-sub">
-            El briefing se genera automáticamente cada mañana a las 7. Si tu workspace es nuevo,
+            El briefing se genera automáticamente cada mañana a las 8. Si tu workspace es nuevo,
             esperá 24h para que haya contenido que resumir.
+          </div>
+        </section>
+      )}
+
+      {!loading && weekly && (
+        <section className="card weekly-card">
+          <div className="head-row">
+            <div className="date">
+              <span className="kind-badge weekly">REFLEXIÓN SEMANAL</span>{' '}
+              Semana de {formatDate(weekly.for_date)}
+            </div>
+            <div className="counts">
+              {(weekly.counts.mails ?? 0) > 0 && (
+                <span className="chip">📧 {weekly.counts.mails}</span>
+              )}
+              {(weekly.counts.calendar_today ?? 0) +
+                (weekly.counts.calendar_upcoming ?? 0) >
+                0 && (
+                <span className="chip">
+                  📅 {(weekly.counts.calendar_today ?? 0) +
+                    (weekly.counts.calendar_upcoming ?? 0)}
+                </span>
+              )}
+              {(weekly.counts.drive ?? 0) > 0 && (
+                <span className="chip">📁 {weekly.counts.drive}</span>
+              )}
+              {(weekly.counts.notes ?? 0) > 0 && (
+                <span className="chip">📝 {weekly.counts.notes}</span>
+              )}
+            </div>
+          </div>
+          <div className="body">
+            <MarkdownLite text={weekly.summary} />
           </div>
         </section>
       )}
@@ -159,7 +199,12 @@ export default function DigestPage() {
           <ul>
             {history.slice(1).map((d) => (
               <li key={d.id}>
-                <div className="hist-date">{formatDate(d.for_date)}</div>
+                <div className="hist-date">
+                  {d.kind === 'weekly' && (
+                    <span className="kind-badge weekly small">SEMANAL</span>
+                  )}{' '}
+                  {formatDate(d.for_date)}
+                </div>
                 <div className="hist-summary">{d.summary.slice(0, 180)}…</div>
               </li>
             ))}
@@ -195,6 +240,21 @@ export default function DigestPage() {
           border-bottom: 1px solid #1a1a1a;
         }
         .date { color: #ddd; font-weight: 700; font-size: 16px; }
+        .weekly-card { border-color: #2a3a5a; background: #0e1119; }
+        .kind-badge {
+          display: inline-block;
+          background: #1a2a5a;
+          color: #aac;
+          font-size: 10px;
+          padding: 2px 8px;
+          border-radius: 99px;
+          border: 1px solid #2a3a6a;
+          letter-spacing: 0.8px;
+          margin-right: 8px;
+          vertical-align: middle;
+        }
+        .kind-badge.weekly { background: #1a2a5a; color: #aac; }
+        .kind-badge.small { font-size: 9px; padding: 1px 6px; }
         .counts { display: flex; gap: 8px; flex-wrap: wrap; }
         .chip {
           background: #1a1a2a;

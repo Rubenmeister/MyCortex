@@ -52,9 +52,11 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
   });
 
   /**
-   * Daily digest endpoints. The cortex-digest Cloud Run Job runs every
-   * morning and writes one row per workspace per date into daily_digests.
-   * /today returns the latest one; /list returns recent.
+   * Digest endpoints. The cortex-digest Cloud Run Job writes rows to
+   * daily_digests:
+   *   - kind='daily' once every morning  → /digest/today returns latest
+   *   - kind='weekly' once every Monday  → /digest/latest-weekly returns latest
+   * /list returns recent of any kind.
    */
   server.get('/digest/today', async (req, reply) => {
     const auth = await requireAuth(req, reply);
@@ -64,6 +66,24 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
       .from('daily_digests')
       .select('*')
       .eq('workspace_id', auth.workspaceId)
+      .eq('kind', 'daily')
+      .order('for_date', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    if (!data) return reply.code(404).send({ error: 'no_digest_yet' });
+    return reply.code(200).send({ digest: data });
+  });
+
+  server.get('/digest/latest-weekly', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+
+    const { data, error } = await auth.db
+      .from('daily_digests')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      .eq('kind', 'weekly')
       .order('for_date', { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -76,16 +96,21 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
     const q = z
-      .object({ limit: z.coerce.number().int().min(1).max(30).default(14) })
+      .object({
+        limit: z.coerce.number().int().min(1).max(30).default(14),
+        kind: z.enum(['daily', 'weekly']).optional(),
+      })
       .safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
 
-    const { data, error } = await auth.db
+    let query = auth.db
       .from('daily_digests')
-      .select('id, for_date, summary, counts, created_at')
+      .select('id, for_date, kind, summary, counts, created_at')
       .eq('workspace_id', auth.workspaceId)
       .order('for_date', { ascending: false })
       .limit(q.data.limit);
+    if (q.data.kind) query = query.eq('kind', q.data.kind);
+    const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
     return reply.code(200).send({ digests: data ?? [] });
   });

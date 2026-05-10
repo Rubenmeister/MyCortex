@@ -111,9 +111,12 @@ export type DigestCounts = {
   calendar_upcoming?: number;
 };
 
+export type DigestKind = 'daily' | 'weekly';
+
 export type DailyDigest = {
   id: string;
   for_date: string;
+  kind: DigestKind;
   summary: string;
   sections: Array<{ title: string; body: string; node_ids?: string[] }>;
   counts: DigestCounts;
@@ -124,6 +127,7 @@ export type DailyDigest = {
 export type DigestListItem = {
   id: string;
   for_date: string;
+  kind: DigestKind;
   summary: string;
   counts: DigestCounts;
   created_at: string;
@@ -198,10 +202,24 @@ export async function getTodaysDigest(): Promise<DailyDigest | null> {
   return json.digest;
 }
 
-export async function listDigests(limit = 14): Promise<DigestListItem[]> {
-  const res = await fetch(`${API_URL}/cortex/digest/list?limit=${limit}`, {
+export async function getLatestWeekly(): Promise<DailyDigest | null> {
+  const res = await fetch(`${API_URL}/cortex/digest/latest-weekly`, {
     headers: await authHeaders(),
   });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(`weekly ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { digest: DailyDigest };
+  return json.digest;
+}
+
+export async function listDigests(
+  limit = 14,
+  kind?: DigestKind,
+): Promise<DigestListItem[]> {
+  const url = new URL(`${API_URL}/cortex/digest/list`);
+  url.searchParams.set('limit', String(limit));
+  if (kind) url.searchParams.set('kind', kind);
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
   if (!res.ok) throw new Error(`digest_list ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const json = (await res.json()) as { digests: DigestListItem[] };
   return json.digests;

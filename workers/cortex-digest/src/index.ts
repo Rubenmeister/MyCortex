@@ -13,6 +13,12 @@ const EnvSchema = z.object({
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
+  /**
+   * Digest type:
+   *   'daily'  → 24h window, morning briefing (default)
+   *   'weekly' → 7d window, Monday reflection
+   */
+  DIGEST_KIND: z.enum(['daily', 'weekly']).default('daily'),
   /** Generate digest for a specific date (YYYY-MM-DD). Defaults to "today" in UTC. */
   DIGEST_FOR_DATE: z.string().optional(),
   /** Run digest only for a specific workspace (uuid). Defaults to all active workspaces. */
@@ -43,21 +49,25 @@ async function gatherInputs(
   db: Db,
   workspaceId: string,
   forDate: Date,
+  kind: 'daily' | 'weekly',
   maxPerSurface: number,
 ): Promise<DigestInputs> {
-  // The "morning briefing of forDate" covers content ingested in the
-  // 24h LEADING UP TO forDate's start. So:
-  //   sinceIso  = forDate-1day at 00:00 UTC
-  //   untilIso  = forDate at 00:00 UTC
+  // Daily: cover 24h before forDate's 00:00 UTC. Morning briefing semantics.
+  // Weekly: cover 7d ending at forDate (typically a Monday). The week
+  //   that just closed.
   const day = new Date(forDate);
   day.setUTCHours(0, 0, 0, 0);
-  const since = new Date(day.getTime() - 24 * 60 * 60 * 1000);
+  const windowDays = kind === 'weekly' ? 7 : 1;
+  const since = new Date(day.getTime() - windowDays * 24 * 60 * 60 * 1000);
   const sinceIso = since.toISOString();
   const untilIso = day.toISOString();
 
-  // For calendar we want events happening TODAY and the next 3 days.
+  // Calendar: daily shows today + 3d ahead; weekly shows the upcoming 7d
+  // (the week starting at `day`).
   const dayEnd = new Date(day.getTime() + 24 * 60 * 60 * 1000);
-  const upcomingEnd = new Date(day.getTime() + 4 * 24 * 60 * 60 * 1000);
+  const upcomingEnd = new Date(
+    day.getTime() + (kind === 'weekly' ? 7 : 4) * 24 * 60 * 60 * 1000,
+  );
 
   // --- New mails ingested in the last 24h
   const { data: mails } = await db
@@ -162,7 +172,7 @@ function nodeLine(n: NodeRow): string {
   return `[Nota] ${title}\n    ${n.content.slice(0, 300).replace(/\s+/g, ' ')}`;
 }
 
-const DIGEST_SYSTEM_PROMPT = `Eres CORTEX, el asistente personal del usuario. Tu rol AHORA es generar el briefing de la mañana — una versión condensada y accionable de lo que pasó ayer + lo que viene hoy.
+const DAILY_PROMPT = `Eres CORTEX, el asistente personal del usuario. Tu rol AHORA es generar el briefing de la mañana — una versión condensada y accionable de lo que pasó ayer + lo que viene hoy.
 
 Formato (markdown):
 1. **Resumen general** (2-3 oraciones): el "estado" del día. Qué demanda atención HOY.
@@ -180,64 +190,95 @@ Reglas:
 
 Tu output va directo a la pantalla de morning briefing. Sé útil.`;
 
+const WEEKLY_PROMPT = `Eres CORTEX, el asistente personal del usuario. Tu rol AHORA es generar la reflexión semanal — qué se hizo, qué quedó pendiente, qué viene.
+
+A diferencia del briefing diario (foco en lo accionable inmediato), la reflexión semanal busca PATRONES y CONTEXTO. La idea es que el lunes a la mañana el usuario tenga un "mapa" claro de la semana que terminó y la que arranca.
+
+Formato (markdown):
+1. **Resumen ejecutivo** (3-4 oraciones): el "tema" de la semana pasada. Avances, bloqueos, decisiones clave.
+2. **Hitos y entregables**: qué se cerró, qué quedó a medias. Identificá conversaciones que avanzaron significativamente y dónde quedaron.
+3. **Pendientes que se arrastran** (hasta 5 bullets): items donde se ven varios mensajes pero ninguna resolución. Resaltá lo que probablemente va a seguir abierto si no actuás.
+4. **Agenda de la próxima semana**: eventos próximos, con énfasis en preparación necesaria.
+5. **Patrones observados** (opcional, 2-3 bullets): repeticiones temáticas, áreas que demandaron mucho tiempo, cambios de prioridad.
+
+Reglas:
+- Cita personas, empresas, números, fechas concretas. NO uses "el cliente", "el equipo" sin nombrarlos.
+- Si detectás un hilo de mails con muchas idas y vueltas sin cierre, marcalo explícitamente: "Pendiente cerrar con X: ya hubo Y intercambios sin resolución".
+- Match el idioma del contenido (probablemente español).
+- Sin saludos. Sin emojis innecesarios. Tono ejecutivo.
+- Si la semana fue tranquila: "Semana tranquila. Sin novedades de peso."
+
+Tu output va directo a la pantalla de weekly reflection los lunes a la mañana.`;
+
 type LLMResult = { summary: string; sections: DigestSection[] };
 
-async function generateDigest(inputs: DigestInputs, forDateIso: string): Promise<LLMResult> {
+async function generateDigest(
+  inputs: DigestInputs,
+  forDateIso: string,
+  kind: 'daily' | 'weekly',
+): Promise<LLMResult> {
+  const windowLabel = kind === 'weekly' ? 'última semana' : 'últimas 24h';
+  const upcomingLabel = kind === 'weekly' ? 'PRÓXIMA SEMANA' : 'siguientes 3 días';
+  const todayLabel = kind === 'weekly' ? `LUNES ${forDateIso}` : forDateIso;
+
   const sections: { heading: string; lines: string[] }[] = [];
   if (inputs.newMails.length > 0) {
     sections.push({
-      heading: 'MAILS NUEVOS (últimas 24h)',
+      heading: `MAILS (${windowLabel})`,
       lines: inputs.newMails.map(nodeLine),
     });
   }
   if (inputs.todayEvents.length > 0) {
     sections.push({
-      heading: `EVENTOS DE HOY (${forDateIso})`,
+      heading: `EVENTOS DE ${todayLabel}`,
       lines: inputs.todayEvents.map(nodeLine),
     });
   }
   if (inputs.upcomingEvents.length > 0) {
     sections.push({
-      heading: 'EVENTOS PRÓXIMOS (siguientes 3 días)',
+      heading: `EVENTOS PRÓXIMOS (${upcomingLabel})`,
       lines: inputs.upcomingEvents.map(nodeLine),
     });
   }
   if (inputs.newDocs.length > 0) {
     sections.push({
-      heading: 'DOCS DRIVE NUEVOS',
+      heading: `DOCS DRIVE (${windowLabel})`,
       lines: inputs.newDocs.map(nodeLine),
     });
   }
   if (inputs.newNotes.length > 0) {
     sections.push({
-      heading: 'NOTAS NUEVAS',
+      heading: `NOTAS (${windowLabel})`,
       lines: inputs.newNotes.map(nodeLine),
     });
   }
 
-  // Truly empty day — write a one-liner without calling the LLM (saves cost
-  // and gives a clean "nothing happened" signal).
+  // Truly empty window — short-circuit without LLM.
   if (sections.length === 0) {
     return {
-      summary: 'Día tranquilo. Sin novedades en tu segundo cerebro.',
+      summary:
+        kind === 'weekly'
+          ? 'Semana tranquila. Sin novedades de peso.'
+          : 'Día tranquilo. Sin novedades en tu segundo cerebro.',
       sections: [],
     };
   }
 
+  const headerLabel =
+    kind === 'weekly'
+      ? `REFLEXIÓN SEMANAL — Semana cerrando ${forDateIso}`
+      : `BRIEFING — ${forDateIso}`;
   const prompt =
-    `FECHA DEL BRIEFING: ${forDateIso}\n\n` +
+    `${headerLabel}\n\n` +
     sections.map((s) => `=== ${s.heading} ===\n${s.lines.join('\n\n')}`).join('\n\n');
 
   const result = await generateText({
     model: models.reasoner,
-    system: DIGEST_SYSTEM_PROMPT,
+    system: kind === 'weekly' ? WEEKLY_PROMPT : DAILY_PROMPT,
     prompt,
-    maxTokens: 1500,
+    maxTokens: kind === 'weekly' ? 2200 : 1500,
   });
 
-  // For now we store the whole LLM output as `summary` and leave `sections`
-  // empty. Future: parse markdown headers back into structured sections for
-  // richer FE rendering (collapsible, per-section node references, etc.).
   return { summary: result.text.trim(), sections: [] };
 }
 
@@ -247,6 +288,7 @@ async function digestForWorkspace(
   forDate: Date,
   cfg: z.infer<typeof EnvSchema>,
 ): Promise<{ skipped: boolean; reason?: string }> {
+  const kind = cfg.DIGEST_KIND;
   // Look up the owning user for this workspace — needed for daily_digests.user_id.
   const { data: ws } = await db
     .from('workspaces')
@@ -255,7 +297,7 @@ async function digestForWorkspace(
     .maybeSingle();
   if (!ws) return { skipped: true, reason: 'workspace_not_found' };
 
-  const inputs = await gatherInputs(db, workspaceId, forDate, cfg.DIGEST_MAX_ITEMS_PER_SURFACE);
+  const inputs = await gatherInputs(db, workspaceId, forDate, kind, cfg.DIGEST_MAX_ITEMS_PER_SURFACE);
   const counts: DigestCounts = {
     mails: inputs.newMails.length,
     drive: inputs.newDocs.length,
@@ -270,11 +312,11 @@ async function digestForWorkspace(
   let summary: string;
   let sections: DigestSection[];
   try {
-    const res = await generateDigest(inputs, forDateIso);
+    const res = await generateDigest(inputs, forDateIso, kind);
     summary = res.summary;
     sections = res.sections;
   } catch (err) {
-    log('error', 'digest_llm_failed', { workspaceId, err: String(err).slice(0, 200) });
+    log('error', 'digest_llm_failed', { workspaceId, kind, err: String(err).slice(0, 200) });
     return { skipped: true, reason: 'llm_failed' };
   }
   const llmMs = Date.now() - llmStart;
@@ -283,23 +325,25 @@ async function digestForWorkspace(
     workspace_id: workspaceId,
     user_id: ws.owner_id,
     for_date: forDateIso,
+    kind,
     summary,
     sections,
     counts,
     metadata: { llmMs, model: 'claude-sonnet-4-6', inputs_total: Object.values(counts).reduce((a, b) => a + (b ?? 0), 0) },
   };
 
-  // Upsert so re-running for the same day overwrites (idempotent).
+  // Upsert so re-running for the same (workspace, for_date, kind) overwrites.
   const { error } = await db
     .from('daily_digests')
-    .upsert(insert, { onConflict: 'workspace_id,for_date' });
+    .upsert(insert, { onConflict: 'workspace_id,for_date,kind' });
   if (error) {
-    log('error', 'digest_db_insert_failed', { workspaceId, err: error.message });
+    log('error', 'digest_db_insert_failed', { workspaceId, kind, err: error.message });
     return { skipped: true, reason: 'db_failed' };
   }
 
   log('info', 'digest_generated', {
     workspaceId,
+    kind,
     for_date: forDateIso,
     counts,
     llmMs,
@@ -318,7 +362,10 @@ async function main(): Promise<void> {
   const db = createDb(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY);
 
   const forDate = cfg.DIGEST_FOR_DATE ? new Date(cfg.DIGEST_FOR_DATE) : new Date();
-  log('info', 'digest_start', { for_date: forDate.toISOString().slice(0, 10) });
+  log('info', 'digest_start', {
+    kind: cfg.DIGEST_KIND,
+    for_date: forDate.toISOString().slice(0, 10),
+  });
 
   // Pick which workspaces to run for. If DIGEST_WORKSPACE_ID is set we
   // run only that one (used for manual testing). Otherwise we run for
