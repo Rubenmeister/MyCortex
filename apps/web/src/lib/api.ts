@@ -68,6 +68,8 @@ export type NoteSource = {
   similarity: number;
   keywordScore: number;
   rrfScore: number;
+  /** Cohere cross-encoder relevance score [0,1]; null if reranker not used. */
+  rerankScore: number | null;
 };
 
 export type WebSource = {
@@ -91,6 +93,9 @@ export type AskResult = {
   transcriptionMs?: number;
   ttsMs?: number;
   webMs?: number;
+  rerankMs?: number;
+  rerankApplied?: boolean;
+  candidatesEvaluated?: number;
 };
 
 export type RecentNode = {

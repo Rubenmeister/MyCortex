@@ -50,5 +50,6 @@ export async function tts(
 }
 
 export { tavilySearch, type TavilyResult, type TavilySearchResponse, type TavilySearchOptions } from './tavily.js';
+export { cohereRerank, type RerankedHit } from './rerank.js';
 
 export { generateText, streamText, generateObject, streamObject, embed } from 'ai';

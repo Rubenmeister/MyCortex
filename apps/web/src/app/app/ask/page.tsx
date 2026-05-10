@@ -179,6 +179,15 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
             🌐 web consultada
           </span>
         )}
+        {result.rerankApplied && (
+          <span
+            className="web-badge"
+            style={{ background: '#1a3a1a', color: '#9c9', borderColor: '#2a4a2a' }}
+            title={`${result.candidatesEvaluated ?? 0} candidatos rerankeados${result.rerankMs ? ` · ${result.rerankMs}ms` : ''}`}
+          >
+            🎯 reranked
+          </span>
+        )}
       </div>
 
       {totalSources > 0 && (
@@ -209,6 +218,9 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
                         <span className="src-title">{s.attribution}</span>
                       </div>
                       <div className="src-meta">
+                        {s.rerankScore !== null && (
+                          <>rerank={s.rerankScore.toFixed(2)} · </>
+                        )}
                         sim={s.similarity.toFixed(2)} · rrf={s.rrfScore.toFixed(3)}
                         {date && ` · ${date}`}
                         {' · '}{s.category}

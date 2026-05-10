@@ -20,6 +20,7 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: optKey,
   GOOGLE_GENERATIVE_AI_API_KEY: optKey,
   TAVILY_API_KEY: optKey,
+  COHERE_API_KEY: optKey,
 
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
   // disable themselves if these aren't configured. Each provider has its

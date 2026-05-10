@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import {
+  cohereRerank,
   embedText,
   generateText,
   models,
@@ -158,22 +159,56 @@ export const askModule: FastifyPluginAsync = async (server) => {
     }
 
     // 2. Embed the question + hybrid search (vector + keyword via RRF).
-    //    The hybrid function returns ALSO title + source + external_metadata
-    //    so we can attribute "according to <Drive doc X>" / "from email
-    //    <Subject Y> by <sender>" in the answer.
+    //    We pull 20 candidates so the reranker has a meaningful pool to
+    //    re-score; without rerank we just take the top of these 20.
     const queryEmbedding = await embedText(question);
     const { data: matches, error: searchErr } = await auth.db.rpc('match_nodes_hybrid', {
       query_embedding: queryEmbedding,
       query_text: question,
       query_workspace_id: auth.workspaceId,
-      match_count: 8,
+      match_count: 20,
       match_threshold: 0.25,
     });
     if (searchErr) {
       req.log.error({ err: searchErr.message }, 'match_nodes_hybrid_failed');
       return reply.code(500).send({ error: 'search_failed', detail: searchErr.message });
     }
-    const noteSources = (matches ?? []) as HybridMatch[];
+    const rawCandidates = (matches ?? []) as HybridMatch[];
+
+    // 2b. Reranker: re-score the 20 candidates with a cross-encoder and
+    //     keep the top 5. Cross-encoders read (query, doc) together so they
+    //     catch nuances vector + keyword miss. We do this only if a Cohere
+    //     key is set; otherwise we fall back to the top 5 from hybrid.
+    const TOP_K_FINAL = 5;
+    let noteSources: HybridMatch[];
+    let rerankMs: number | undefined;
+    const rerankScoreById = new Map<string, number>();
+    if (env.COHERE_API_KEY && rawCandidates.length > 1) {
+      const rerankStart = Date.now();
+      try {
+        // We rerank against title+content so the cross-encoder sees the
+        // structured attribution context, not just the chunked body.
+        const reranked = await cohereRerank(
+          question,
+          rawCandidates.map((c) => ({
+            ...c,
+            text: c.title ? `${c.title}\n\n${c.content}` : c.content,
+          })),
+          env.COHERE_API_KEY,
+          { topN: TOP_K_FINAL },
+        );
+        noteSources = reranked.map((r) => {
+          rerankScoreById.set(r.doc.id, r.score);
+          return r.doc as HybridMatch;
+        });
+        rerankMs = Date.now() - rerankStart;
+      } catch (err) {
+        req.log.warn({ err: String(err) }, 'cohere_rerank_failed_falling_back_to_hybrid');
+        noteSources = rawCandidates.slice(0, TOP_K_FINAL);
+      }
+    } else {
+      noteSources = rawCandidates.slice(0, TOP_K_FINAL);
+    }
     const bestNoteSimilarity = noteSources.length > 0 ? noteSources[0]!.similarity : 0;
 
     // 3. Decide whether to call Tavily as a fallback / supplement.
@@ -289,6 +324,7 @@ export const askModule: FastifyPluginAsync = async (server) => {
         similarity: s.similarity,
         keywordScore: s.keyword_score,
         rrfScore: s.rrf_score,
+        rerankScore: rerankScoreById.get(s.id) ?? null,
       })),
       webSources: webResults.map((r) => ({
         title: r.title,
@@ -303,6 +339,9 @@ export const askModule: FastifyPluginAsync = async (server) => {
       ...(transcriptionMs !== undefined && { transcriptionMs }),
       ...(ttsMs !== undefined && { ttsMs }),
       ...(webMs !== undefined && { webMs }),
+      ...(rerankMs !== undefined && { rerankMs }),
+      rerankApplied: rerankScoreById.size > 0,
+      candidatesEvaluated: rawCandidates.length,
     });
   });
 };
