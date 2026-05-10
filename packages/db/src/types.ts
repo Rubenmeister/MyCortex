@@ -61,6 +61,9 @@ export type NodeRow = {
   source: IngestSource;
   embedding: string | null;
   metadata: Json;
+  external_source: string | null;
+  external_id: string | null;
+  external_metadata: Json | null;
   created_at: string;
   updated_at: string;
 };
@@ -76,6 +79,9 @@ export type NodeInsert = {
   source: IngestSource;
   embedding?: number[] | null;
   metadata?: Json;
+  external_source?: string | null;
+  external_id?: string | null;
+  external_metadata?: Json | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -151,6 +157,85 @@ export type EvolutionActionUpdate = Partial<
   Omit<EvolutionActionInsert, 'run_id' | 'user_id' | 'target_node_id' | 'workspace_id'>
 >;
 
+// ---- Integrations ------------------------------------------------------
+
+export type IntegrationProvider = 'google_drive' | 'gmail' | 'notion';
+export type IntegrationStatus = 'active' | 'revoked' | 'error';
+
+export type IntegrationRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  provider: IntegrationProvider;
+  status: IntegrationStatus;
+  access_token: string;
+  refresh_token: string | null;
+  token_expires_at: string | null;
+  scope: string | null;
+  external_account_email: string | null;
+  external_account_id: string | null;
+  metadata: Json;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IntegrationInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  provider: IntegrationProvider;
+  status?: IntegrationStatus;
+  access_token: string;
+  refresh_token?: string | null;
+  token_expires_at?: string | null;
+  scope?: string | null;
+  external_account_email?: string | null;
+  external_account_id?: string | null;
+  metadata?: Json;
+  last_error?: string | null;
+};
+
+export type IntegrationUpdate = Partial<
+  Omit<IntegrationInsert, 'workspace_id' | 'user_id' | 'provider'>
+>;
+
+export type SyncSourceStatus = 'active' | 'paused' | 'error';
+
+export type SyncSourceRow = {
+  id: string;
+  integration_id: string;
+  workspace_id: string;
+  external_id: string;
+  display_name: string;
+  status: SyncSourceStatus;
+  last_synced_at: string | null;
+  last_sync_cursor: string | null;
+  items_synced: number;
+  last_error: string | null;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SyncSourceInsert = {
+  id?: string;
+  integration_id: string;
+  workspace_id: string;
+  external_id: string;
+  display_name: string;
+  status?: SyncSourceStatus;
+  last_synced_at?: string | null;
+  last_sync_cursor?: string | null;
+  items_synced?: number;
+  last_error?: string | null;
+  metadata?: Json;
+};
+
+export type SyncSourceUpdate = Partial<
+  Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
+>;
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -184,6 +269,18 @@ export type Database = {
         Row: EvolutionActionRow;
         Insert: EvolutionActionInsert;
         Update: EvolutionActionUpdate;
+        Relationships: [];
+      };
+      integrations: {
+        Row: IntegrationRow;
+        Insert: IntegrationInsert;
+        Update: IntegrationUpdate;
+        Relationships: [];
+      };
+      sync_sources: {
+        Row: SyncSourceRow;
+        Insert: SyncSourceInsert;
+        Update: SyncSourceUpdate;
         Relationships: [];
       };
     };

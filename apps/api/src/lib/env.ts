@@ -20,6 +20,16 @@ const EnvSchema = z.object({
   ANTHROPIC_API_KEY: optKey,
   GOOGLE_GENERATIVE_AI_API_KEY: optKey,
   TAVILY_API_KEY: optKey,
+
+  // Google OAuth (Drive, Gmail). Optional — integrations gracefully
+  // disable themselves if these aren't configured.
+  GOOGLE_OAUTH_CLIENT_ID: optKey,
+  GOOGLE_OAUTH_CLIENT_SECRET: optKey,
+  GOOGLE_OAUTH_REDIRECT_URI: optKey,
+
+  // Where to redirect the user back to after OAuth (the web app).
+  // Defaults to the Vercel prod URL.
+  WEB_BASE_URL: z.string().url().default('https://my-cortex-web-gxoh.vercel.app'),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
