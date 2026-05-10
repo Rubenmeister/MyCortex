@@ -300,6 +300,29 @@ export type Database = {
           similarity: number;
         }>;
       };
+      match_nodes_hybrid: {
+        Args: {
+          query_embedding: number[];
+          query_text: string;
+          query_workspace_id: string;
+          match_count?: number;
+          match_threshold?: number;
+        };
+        Returns: Array<{
+          id: string;
+          title: string | null;
+          content: string;
+          category: NodeCategory;
+          source: IngestSource;
+          external_source: string | null;
+          external_id: string | null;
+          external_metadata: Json | null;
+          created_at: string;
+          similarity: number;
+          keyword_score: number;
+          rrf_score: number;
+        }>;
+      };
     };
     Enums: {
       node_kind: NodeKind;

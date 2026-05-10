@@ -191,16 +191,32 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
 
           {result.sources.length > 0 && (
             <>
-              <div className="src-section">📝 De tus notas</div>
+              <div className="src-section">🧠 De tu segundo cerebro</div>
               <ul>
-                {result.sources.map((s) => (
-                  <li key={s.id}>
-                    <span style={{ color: '#666', fontSize: 11 }}>
-                      sim={s.similarity.toFixed(2)} · {s.category}
-                    </span>
-                    <div style={{ marginTop: 2 }}>{s.content.slice(0, 160)}…</div>
-                  </li>
-                ))}
+                {result.sources.map((s) => {
+                  const icon =
+                    s.origin === 'drive' ? '📁' : s.origin === 'gmail' ? '📧' : '📝';
+                  const m = s.externalMetadata ?? {};
+                  const dateRaw =
+                    (m.date as string | undefined) ??
+                    (m.modifiedTime as string | undefined) ??
+                    s.createdAt;
+                  const date = dateRaw ? new Date(dateRaw).toLocaleDateString() : null;
+                  return (
+                    <li key={s.id}>
+                      <div className="src-head">
+                        <span className="src-icon">{icon}</span>
+                        <span className="src-title">{s.attribution}</span>
+                      </div>
+                      <div className="src-meta">
+                        sim={s.similarity.toFixed(2)} · rrf={s.rrfScore.toFixed(3)}
+                        {date && ` · ${date}`}
+                        {' · '}{s.category}
+                      </div>
+                      <div className="src-content">{s.content.slice(0, 260)}…</div>
+                    </li>
+                  );
+                })}
               </ul>
             </>
           )}
@@ -277,6 +293,29 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
           line-height: 1.4;
           padding: 8px 12px;
           border-left: 2px solid #2a2a3a;
+        }
+        .src-head {
+          display: flex;
+          gap: 8px;
+          align-items: baseline;
+          margin-bottom: 2px;
+        }
+        .src-icon {
+          font-size: 14px;
+        }
+        .src-title {
+          color: #d8d8e8;
+          font-weight: 600;
+          font-size: 13px;
+        }
+        .src-meta {
+          color: #666;
+          font-size: 11px;
+        }
+        .src-content {
+          margin-top: 4px;
+          color: #aaa;
+          font-size: 12px;
         }
         .actions {
           display: flex;

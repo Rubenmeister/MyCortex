@@ -52,9 +52,22 @@ export type IngestResult = {
 export type NoteSource = {
   kind: 'note';
   id: string;
+  /** Where this source physically lives: a direct note, a Drive file, or a Gmail message. */
+  origin: 'note' | 'drive' | 'gmail';
+  /** File name, email subject, or note title. May be null for legacy notes. */
+  title: string | null;
+  /** Short human-readable label like "Drive › report.pdf" or "Gmail › 'Subject' — Sender". */
+  attribution: string;
   content: string;
   category: string;
+  /** Ingest source: which path created the node (web/mobile/drive/gmail/etc.). */
+  source: string;
+  /** Per-origin metadata (filename, mime_type, from/to/subject/date, etc.). */
+  externalMetadata: Record<string, unknown> | null;
+  createdAt: string;
   similarity: number;
+  keywordScore: number;
+  rrfScore: number;
 };
 
 export type WebSource = {

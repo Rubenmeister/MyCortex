@@ -31,6 +31,50 @@ const AUDIO_BODY = z.object({
 });
 const AskBodySchema = z.union([TEXT_BODY, AUDIO_BODY]);
 
+/**
+ * Shape returned by match_nodes_hybrid. We re-declare here to avoid leaking
+ * Supabase's `unknown` types into every callsite.
+ */
+type HybridMatch = {
+  id: string;
+  title: string | null;
+  content: string;
+  category: string;
+  source: string;
+  external_source: string | null;
+  external_id: string | null;
+  external_metadata: Record<string, unknown> | null;
+  created_at: string;
+  similarity: number;
+  keyword_score: number;
+  rrf_score: number;
+};
+
+/**
+ * Build a short human-readable attribution label per source. Used in the
+ * prompt so Claude can write "según tu doc X" / "en el mail Y de Z" and
+ * surfaced in the FE source list.
+ */
+function attributionLabel(s: HybridMatch): string {
+  const meta = (s.external_metadata ?? {}) as Record<string, unknown>;
+  if (s.external_source === 'drive') {
+    const filename = (meta.filename as string | undefined) ?? s.title ?? 'Drive file';
+    return `Drive › ${filename}`;
+  }
+  if (s.external_source === 'gmail') {
+    const subj = (meta.subject as string | undefined) ?? s.title ?? '(sin asunto)';
+    const from = (meta.from as string | undefined) ?? '';
+    // Trim from to display name only if possible: "Name <email>" -> "Name"
+    const fromShort = from.match(/^"?([^"<]+?)"?\s*</)?.[1]?.trim() ?? from;
+    return fromShort
+      ? `Gmail › "${subj.slice(0, 60)}" — ${fromShort.slice(0, 40)}`
+      : `Gmail › "${subj.slice(0, 60)}"`;
+  }
+  // Plain note / capture
+  if (s.title) return `Nota: ${s.title.slice(0, 60)}`;
+  return `Nota (${s.source})`;
+}
+
 // Below this similarity, we consider the user's notes weak enough to reach
 // for live web search. Calibrated against text-embedding-3-small: a single
 // note that incidentally shares a keyword with the question (e.g. a "hola
@@ -42,29 +86,36 @@ const AskBodySchema = z.union([TEXT_BODY, AUDIO_BODY]);
 // keyword overlaps stay below.
 const WEB_FALLBACK_SIMILARITY = 0.7;
 
-const SYSTEM_PROMPT_NOTES_ONLY = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro.
+const SYSTEM_PROMPT_NOTES_ONLY = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro (notas, Drive, Gmail).
 
-Las NOTAS que recibes son los apuntes del propio usuario.
+Cada fuente lleva una ETIQUETA tipo [N1], [N2]… con su origen (Nota / Drive / Gmail).
 
 Reglas:
-- Prioriza siempre las NOTAS para responder. Habla naturalmente, como recordando.
-- Sé directo y conciso (1-3 oraciones, máximo 100 palabras).
-- Si las notas no contienen la respuesta, dilo honestamente: "No encontré nada sobre eso en tus notas".
-- NO inventes información. NO cites "fuentes web" o "internet" — en esta consulta solo tienes notas.
+- Prioriza siempre las fuentes para responder. Habla naturalmente.
+- Cuando uses una fuente, refiérete a ella por su origen específico cuando sea relevante:
+    * "Según el doc 'X' de tu Drive…"
+    * "En el mail de Y sobre 'Z'…"
+    * "Tu nota del [fecha] dice…"
+- Sé directo y conciso (1-3 oraciones, máximo 120 palabras).
+- Si las fuentes no contienen la respuesta, dilo honestamente: "No encontré nada sobre eso en tu segundo cerebro".
+- NO inventes información. NO cites "fuentes web" o "internet" — en esta consulta solo tienes el segundo cerebro.
 
 Match the language of the question.`;
 
-const SYSTEM_PROMPT_WITH_WEB = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro Y a búsqueda web en tiempo real.
+const SYSTEM_PROMPT_WITH_WEB = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro (notas, Drive, Gmail) Y a búsqueda web en tiempo real.
 
-Tipos de fuentes que recibes:
-- NOTAS: apuntes del propio usuario.
-- FUENTES WEB: resultados de búsqueda hechos en este momento para esta pregunta.
+Tipos de fuentes:
+- [N1], [N2]…  Fuentes del segundo cerebro (etiqueta indica origen: Nota / Drive / Gmail).
+- [W1], [W2]…  Resultados de búsqueda web hechos AHORA para esta pregunta.
 
 Reglas:
-- Prioriza NOTAS si responden la pregunta. Si no alcanzan, complementa con FUENTES WEB.
-- Cuando uses información de FUENTES WEB, indícalo brevemente ("Según fuentes web…", "En internet aparece…", etc.).
+- Prioriza el segundo cerebro si responde la pregunta. Si no alcanza, complementa con FUENTES WEB.
+- Cuando uses una fuente del segundo cerebro, refiérete a ella por su origen específico:
+    * "Según el doc 'X' de tu Drive…"
+    * "En el mail de Y sobre 'Z'…"
+- Cuando uses una FUENTE WEB, indícalo: "Según fuentes web…", "En internet aparece…", etc.
 - Si combinas ambas, sé claro sobre qué viene de dónde.
-- Sé directo y conciso (1-3 oraciones, máximo 100 palabras).
+- Sé directo y conciso (1-3 oraciones, máximo 120 palabras).
 - Si ninguna fuente alcanza, dilo honestamente.
 
 Match the language of the question.`;
@@ -106,19 +157,23 @@ export const askModule: FastifyPluginAsync = async (server) => {
       if (!question) return reply.code(422).send({ error: 'empty_transcript' });
     }
 
-    // 2. Embed the question + semantic search over the user's workspace.
+    // 2. Embed the question + hybrid search (vector + keyword via RRF).
+    //    The hybrid function returns ALSO title + source + external_metadata
+    //    so we can attribute "according to <Drive doc X>" / "from email
+    //    <Subject Y> by <sender>" in the answer.
     const queryEmbedding = await embedText(question);
-    const { data: matches, error: searchErr } = await auth.db.rpc('match_nodes', {
+    const { data: matches, error: searchErr } = await auth.db.rpc('match_nodes_hybrid', {
       query_embedding: queryEmbedding,
+      query_text: question,
       query_workspace_id: auth.workspaceId,
-      match_count: 5,
+      match_count: 8,
       match_threshold: 0.25,
     });
     if (searchErr) {
-      req.log.error({ err: searchErr.message }, 'match_nodes_failed');
+      req.log.error({ err: searchErr.message }, 'match_nodes_hybrid_failed');
       return reply.code(500).send({ error: 'search_failed', detail: searchErr.message });
     }
-    const noteSources = matches ?? [];
+    const noteSources = (matches ?? []) as HybridMatch[];
     const bestNoteSimilarity = noteSources.length > 0 ? noteSources[0]!.similarity : 0;
 
     // 3. Decide whether to call Tavily as a fallback / supplement.
@@ -151,15 +206,17 @@ export const askModule: FastifyPluginAsync = async (server) => {
       }
     }
 
-    // 4. Build the prompt with both kinds of sources clearly labeled.
+    // 4. Build the prompt with both kinds of sources clearly labeled. Each
+    //    note source includes its origin (Nota / Drive / Gmail with subject)
+    //    so the LLM can write specific attributions in the answer.
     const noteSection =
       noteSources.length === 0
         ? ''
-        : `\n\nNOTAS RELEVANTES:\n` +
+        : `\n\nFUENTES DE TU SEGUNDO CEREBRO:\n` +
           noteSources
             .map(
               (s, i) =>
-                `  [N${i + 1}] (similitud=${s.similarity.toFixed(2)}, categoria=${s.category}) ${s.content}`,
+                `  [N${i + 1}] ${attributionLabel(s)} (similitud=${s.similarity.toFixed(2)}, score=${s.rrf_score.toFixed(3)})\n      ${s.content.slice(0, 1200)}`,
             )
             .join('\n');
     const webSection =
@@ -213,10 +270,25 @@ export const askModule: FastifyPluginAsync = async (server) => {
       answer,
       sources: noteSources.map((s) => ({
         id: s.id,
+        kind: 'note' as const,
+        // What origin the source came from:
+        // 'drive' / 'gmail' = external integration; 'note' = direct capture.
+        origin:
+          s.external_source === 'drive'
+            ? ('drive' as const)
+            : s.external_source === 'gmail'
+              ? ('gmail' as const)
+              : ('note' as const),
+        title: s.title,
+        attribution: attributionLabel(s),
         content: s.content,
         category: s.category,
+        source: s.source,
+        externalMetadata: s.external_metadata,
+        createdAt: s.created_at,
         similarity: s.similarity,
-        kind: 'note' as const,
+        keywordScore: s.keyword_score,
+        rrfScore: s.rrf_score,
       })),
       webSources: webResults.map((r) => ({
         title: r.title,
