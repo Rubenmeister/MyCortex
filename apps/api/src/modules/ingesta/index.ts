@@ -9,7 +9,11 @@ import { transcribeAudio } from './whisper.js';
 export const ingestaModule: FastifyPluginAsync = async (server) => {
   async function ingestText(
     auth: NonNullable<Awaited<ReturnType<typeof requireAuth>>>,
-    args: { source: 'telegram' | 'mobile' | 'web' | 'api'; text: string; explicitTitle?: string },
+    args: {
+      source: 'telegram' | 'mobile' | 'web' | 'api' | 'drive' | 'gmail';
+      text: string;
+      explicitTitle?: string;
+    },
     reqLog: { log: { warn: (...a: unknown[]) => void; info: (...a: unknown[]) => void; error: (...a: unknown[]) => void } },
   ) {
     const classification = await classify(args.text);

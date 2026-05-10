@@ -49,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
+    // @ts-expect-error — multi-version @types/react in workspace (mobile=18,
+    // web=19) confuses JSX type unification. Runtime is fine.
     <Ctx.Provider value={{ session, loading, signIn, signOut }}>{children}</Ctx.Provider>
   );
 }

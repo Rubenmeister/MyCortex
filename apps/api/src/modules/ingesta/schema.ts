@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const IngestRequestSchema = z.object({
-  source: z.enum(['telegram', 'mobile', 'web', 'api']),
+  source: z.enum(['telegram', 'mobile', 'web', 'api', 'drive', 'gmail']),
   text: z.string().trim().min(1).optional(),
   audioUrl: z.string().url().optional(),
   imageUrl: z.string().url().optional(),
@@ -11,7 +11,7 @@ export const IngestRequestSchema = z.object({
 });
 
 export const IngestAudioRequestSchema = z.object({
-  source: z.enum(['telegram', 'mobile', 'web', 'api']),
+  source: z.enum(['telegram', 'mobile', 'web', 'api', 'drive', 'gmail']),
   audioBase64: z.string().min(100, 'audio payload too small'),
   mimeType: z.string().regex(/^audio\//, 'mimeType must start with audio/'),
   language: z.string().length(2).optional(),

@@ -196,6 +196,86 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
     return reply.redirect(`${back}?drive_connected=${encodeURIComponent(userInfo.email)}`);
   });
 
+  // ---- GET /integrations/:id/sources ------------------------------------
+  // List configured sync sources (folders) for this integration.
+  server.get('/:id/sources', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z.object({ id: z.string().uuid() }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+
+    const { data, error } = await getDb()
+      .from('sync_sources')
+      .select('*')
+      .eq('integration_id', params.data.id)
+      .eq('workspace_id', auth.workspaceId)
+      .order('created_at', { ascending: false });
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ sources: data ?? [] });
+  });
+
+  // ---- POST /integrations/:id/sources -----------------------------------
+  // Add a Drive folder as a sync source. Idempotent: if already exists,
+  // returns the existing row.
+  server.post('/:id/sources', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z.object({ id: z.string().uuid() }).safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+    const body = z
+      .object({
+        externalId: z.string().min(1),
+        displayName: z.string().min(1),
+      })
+      .safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_body', issues: body.error.issues });
+
+    // Verify the integration belongs to the user's workspace before linking.
+    const { data: integration } = await getDb()
+      .from('integrations')
+      .select('id,workspace_id')
+      .eq('id', params.data.id)
+      .eq('workspace_id', auth.workspaceId)
+      .maybeSingle();
+    if (!integration) return reply.code(404).send({ error: 'integration_not_found' });
+
+    const { data, error } = await getDb()
+      .from('sync_sources')
+      .upsert(
+        {
+          integration_id: params.data.id,
+          workspace_id: auth.workspaceId,
+          external_id: body.data.externalId,
+          display_name: body.data.displayName,
+          status: 'active',
+        },
+        { onConflict: 'integration_id,external_id' },
+      )
+      .select()
+      .single();
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ source: data });
+  });
+
+  // ---- DELETE /integrations/:id/sources/:sourceId -----------------------
+  server.delete('/:id/sources/:sourceId', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z
+      .object({ id: z.string().uuid(), sourceId: z.string().uuid() })
+      .safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+
+    const { error } = await getDb()
+      .from('sync_sources')
+      .delete()
+      .eq('id', params.data.sourceId)
+      .eq('integration_id', params.data.id)
+      .eq('workspace_id', auth.workspaceId);
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(204).send();
+  });
+
   // ---- GET /integrations/:id/folders -------------------------------------
   // List the user's Drive folders so they can pick which to sync.
   server.get('/:id/folders', async (req, reply) => {

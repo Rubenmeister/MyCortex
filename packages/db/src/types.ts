@@ -3,7 +3,7 @@
 
 export type NodeKind = 'note' | 'task' | 'idea' | 'reference' | 'fragment';
 export type NodeCategory = 'going' | 'personal' | 'urgent' | 'unknown';
-export type IngestSource = 'telegram' | 'mobile' | 'web' | 'api';
+export type IngestSource = 'telegram' | 'mobile' | 'web' | 'api' | 'drive' | 'gmail';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
