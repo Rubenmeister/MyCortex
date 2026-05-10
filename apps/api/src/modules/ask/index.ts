@@ -52,6 +52,66 @@ type HybridMatch = {
 };
 
 /**
+ * Rewrite the user's natural-language question into a retrieval-optimized
+ * search query. The rewriter is given specific constraints (preserve names,
+ * dates, numbers; expand obvious acronyms; add 1-3 synonyms; drop filler).
+ *
+ * We only rewrite when the question looks conversational (length > 20 chars
+ * OR contains a question word). Already-keyword-like queries are passed
+ * through unchanged to avoid the rewriter degrading them.
+ *
+ * Returns the rewritten query OR the original on failure / empty output.
+ */
+const REWRITE_SYSTEM = `You are a search query optimizer for a personal knowledge base (notes, Drive docs, emails).
+
+Rewrite the user's question into a concise retrieval query that:
+- KEEPS ALL proper nouns, names, numbers, dates, acronyms VERBATIM (do not translate or expand company/person names).
+- Adds 1-3 related keywords that would appear in relevant documents (synonyms, alternate phrasings).
+- Removes conversational filler ("me podés decir", "qué onda con", "tengo una duda sobre", etc.).
+- Stays in the SAME language as the input.
+- Outputs ONLY the rewritten query on a single line — no quotes, no explanation, no "Rewritten query:" prefix.
+
+Examples:
+Input: "¿qué onda con la marca?"
+Output: registro marca Going App estado trámite
+
+Input: "cuánto pagué de luz en marzo"
+Output: factura electricidad pago marzo recibo luz
+
+Input: "what did Anna say about the budget last week"
+Output: Anna budget meeting last week conversation message`;
+
+async function rewriteQueryForRetrieval(
+  question: string,
+): Promise<{ rewritten: string; rewrittenMs: number | null }> {
+  const trimmed = question.trim();
+  // Skip rewrite for already-terse queries: 1-3 words with no question marks.
+  const wordCount = trimmed.split(/\s+/).length;
+  if (wordCount <= 3 && !/[?¿]/.test(trimmed)) {
+    return { rewritten: trimmed, rewrittenMs: null };
+  }
+  const start = Date.now();
+  try {
+    const result = await generateText({
+      model: models.classifier, // GPT-4o-mini — fast, cheap, good enough
+      system: REWRITE_SYSTEM,
+      prompt: trimmed,
+      // Cap output to avoid runaway. Reranker handles long content anyway.
+      maxTokens: 80,
+    });
+    const out = result.text.trim().replace(/^["']|["']$/g, '');
+    // Sanity: if the rewriter returns empty or extremely long, fall back.
+    if (!out || out.length > trimmed.length * 4) {
+      return { rewritten: trimmed, rewrittenMs: Date.now() - start };
+    }
+    return { rewritten: out, rewrittenMs: Date.now() - start };
+  } catch {
+    // Rewriter is a quality boost, not critical — silent fallback.
+    return { rewritten: trimmed, rewrittenMs: Date.now() - start };
+  }
+}
+
+/**
  * Build a short human-readable attribution label per source. Used in the
  * prompt so Claude can write "según tu doc X" / "en el mail Y de Z" and
  * surfaced in the FE source list.
@@ -158,13 +218,19 @@ export const askModule: FastifyPluginAsync = async (server) => {
       if (!question) return reply.code(422).send({ error: 'empty_transcript' });
     }
 
-    // 2. Embed the question + hybrid search (vector + keyword via RRF).
-    //    We pull 20 candidates so the reranker has a meaningful pool to
-    //    re-score; without rerank we just take the top of these 20.
-    const queryEmbedding = await embedText(question);
+    // 2. Query rewriting: turn the user's natural-language question into a
+    //    retrieval-optimized query (preserves names/dates/numbers, adds
+    //    keyword synonyms, drops filler). Falls back silently on failure.
+    //    The ORIGINAL question stays in the LLM prompt for context.
+    const { rewritten: searchQuery, rewrittenMs } = await rewriteQueryForRetrieval(question);
+
+    // 3. Embed the rewritten query + hybrid search (vector + FTS via RRF).
+    //    Pull 20 candidates so the reranker has a meaningful pool to score;
+    //    without rerank we just take the top of these 20.
+    const queryEmbedding = await embedText(searchQuery);
     const { data: matches, error: searchErr } = await auth.db.rpc('match_nodes_hybrid', {
       query_embedding: queryEmbedding,
-      query_text: question,
+      query_text: searchQuery,
       query_workspace_id: auth.workspaceId,
       match_count: 20,
       match_threshold: 0.25,
@@ -342,6 +408,12 @@ export const askModule: FastifyPluginAsync = async (server) => {
       ...(rerankMs !== undefined && { rerankMs }),
       rerankApplied: rerankScoreById.size > 0,
       candidatesEvaluated: rawCandidates.length,
+      // Search query that was actually used (may differ from `question`
+      // when the rewriter applied). Useful for debugging retrieval issues
+      // and showing the user what we're searching for.
+      searchQuery,
+      ...(rewrittenMs !== null && { rewriteMs: rewrittenMs }),
+      queryRewritten: searchQuery !== question,
     });
   });
 };

@@ -96,6 +96,11 @@ export type AskResult = {
   rerankMs?: number;
   rerankApplied?: boolean;
   candidatesEvaluated?: number;
+  /** Actual search query used (post-rewrite). Equals `question` when no rewrite. */
+  searchQuery?: string;
+  /** Whether the rewriter changed the query. */
+  queryRewritten?: boolean;
+  rewriteMs?: number;
 };
 
 export type RecentNode = {

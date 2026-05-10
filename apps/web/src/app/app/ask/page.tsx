@@ -166,6 +166,11 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
   return (
     <div className="ans">
       <div className="q">❓ {result.question}</div>
+      {result.queryRewritten && result.searchQuery && (
+        <div className="rewritten" title="Query reescrita por el optimizador de búsqueda">
+          🔎 búsqueda: <code>{result.searchQuery}</code>
+        </div>
+      )}
       <div className="a">{result.answer}</div>
 
       <div className="actions">
@@ -262,7 +267,20 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
         .q {
           color: #888;
           font-size: 13px;
+          margin-bottom: 8px;
+        }
+        .rewritten {
+          color: #6a7a8a;
+          font-size: 11px;
           margin-bottom: 12px;
+          font-family: monospace;
+        }
+        .rewritten code {
+          background: #1a1a2a;
+          color: #aac;
+          padding: 1px 6px;
+          border-radius: 3px;
+          font-size: 11px;
         }
         .a {
           color: #fff;
