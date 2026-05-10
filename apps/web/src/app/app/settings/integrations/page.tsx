@@ -139,6 +139,13 @@ export default function IntegrationsPage() {
       {driveError && (
         <div className="alert alert-err">
           ❌ Error conectando Drive: <code>{driveError}</code>
+          {driveError === 'missing_drive_scope' && (
+            <div style={{ marginTop: 8, fontSize: 12 }}>
+              No marcaste el permiso para acceder a tu Drive en la pantalla de
+              Google. Click "Conectar Google Drive" de nuevo y asegurate de
+              activar TODOS los permisos que pide.
+            </div>
+          )}
         </div>
       )}
       {error && <div className="alert alert-err">{error}</div>}

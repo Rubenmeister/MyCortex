@@ -158,6 +158,18 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       return reply.redirect(`${back}?drive_error=token_exchange_failed`);
     }
 
+    // Google's "granular consent" lets users opt out of individual scopes.
+    // If Drive readonly isn't in the granted scope set, the integration is
+    // useless — refuse to save it and tell the user to retry. Otherwise
+    // they'd get cryptic 403s every time the worker tries to list files.
+    const grantedScopes = new Set(tokens.scope.split(/\s+/).filter(Boolean));
+    if (!grantedScopes.has('https://www.googleapis.com/auth/drive.readonly')) {
+      req.log.warn({ scope: tokens.scope }, 'drive_scope_missing_drive_readonly');
+      return reply.redirect(
+        `${back}?drive_error=missing_drive_scope&granted=${encodeURIComponent(tokens.scope)}`,
+      );
+    }
+
     let userInfo;
     try {
       userInfo = await fetchUserInfo(tokens.access_token);
