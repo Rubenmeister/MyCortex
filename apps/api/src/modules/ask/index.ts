@@ -31,22 +31,36 @@ const AUDIO_BODY = z.object({
 });
 const AskBodySchema = z.union([TEXT_BODY, AUDIO_BODY]);
 
-// Below this similarity, we consider the notes a weak match and reach for the
-// web. Calibrated against text-embedding-3-small (related notes ~0.45–0.60).
-const WEB_FALLBACK_SIMILARITY = 0.45;
+// Below this similarity, we consider the user's notes weak enough to reach
+// for live web search. Calibrated against text-embedding-3-small: related
+// notes typically score 0.45-0.65, so 0.55 means "clearly on-topic notes
+// keep us off the web; merely-correlated notes trigger the supplement".
+const WEB_FALLBACK_SIMILARITY = 0.55;
 
-const SYSTEM_PROMPT = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro y a búsqueda web.
+const SYSTEM_PROMPT_NOTES_ONLY = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro.
 
-Tienes dos tipos de fuentes:
-- NOTAS: información del propio segundo cerebro del usuario (sus apuntes capturados).
-- WEB: resultados de búsqueda en internet, traídos en tiempo real.
+Las NOTAS que recibes son los apuntes del propio usuario.
 
-Cuando respondas:
-- Prioriza la información de las NOTAS si responde la pregunta. Habla naturalmente, como recordando.
-- Si las notas no alcanzan, usa la información WEB. Indica brevemente que es info externa ("Según fuentes web…", "En internet aparece…", etc.).
-- Si combinas ambas fuentes, sé claro sobre qué viene de dónde.
+Reglas:
+- Prioriza siempre las NOTAS para responder. Habla naturalmente, como recordando.
 - Sé directo y conciso (1-3 oraciones, máximo 100 palabras).
-- Si no hay info útil de ninguna fuente, dilo honestamente.
+- Si las notas no contienen la respuesta, dilo honestamente: "No encontré nada sobre eso en tus notas".
+- NO inventes información. NO cites "fuentes web" o "internet" — en esta consulta solo tienes notas.
+
+Match the language of the question.`;
+
+const SYSTEM_PROMPT_WITH_WEB = `Eres CORTEX, el asistente personal del usuario, con acceso a su segundo cerebro Y a búsqueda web en tiempo real.
+
+Tipos de fuentes que recibes:
+- NOTAS: apuntes del propio usuario.
+- FUENTES WEB: resultados de búsqueda hechos en este momento para esta pregunta.
+
+Reglas:
+- Prioriza NOTAS si responden la pregunta. Si no alcanzan, complementa con FUENTES WEB.
+- Cuando uses información de FUENTES WEB, indícalo brevemente ("Según fuentes web…", "En internet aparece…", etc.).
+- Si combinas ambas, sé claro sobre qué viene de dónde.
+- Sé directo y conciso (1-3 oraciones, máximo 100 palabras).
+- Si ninguna fuente alcanza, dilo honestamente.
 
 Match the language of the question.`;
 
@@ -156,12 +170,17 @@ export const askModule: FastifyPluginAsync = async (server) => {
         ? `PREGUNTA: ${question}\n\nNo hay información disponible de ninguna fuente.`
         : `PREGUNTA: ${question}${noteSection}${webSection}`;
 
-    // 5. Generate answer with Claude
+    // 5. Generate answer with Claude.
+    //    Pick the prompt that matches what we actually gave it: telling
+    //    Claude it has web access when we didn't search the web makes it
+    //    invent "según fuentes web" attributions.
+    const systemPrompt =
+      webResults.length > 0 ? SYSTEM_PROMPT_WITH_WEB : SYSTEM_PROMPT_NOTES_ONLY;
     let answer: string;
     try {
       const result = await generateText({
         model: models.reasoner,
-        system: SYSTEM_PROMPT,
+        system: systemPrompt,
         prompt: userPrompt,
       });
       answer = result.text.trim();

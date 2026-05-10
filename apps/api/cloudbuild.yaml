@@ -75,7 +75,7 @@ steps:
       - --timeout=60s
       - --service-account=mycortex-api-sa@$PROJECT_ID.iam.gserviceaccount.com
       - --set-env-vars=NODE_ENV=production,LOG_LEVEL=info,SUPABASE_URL=${_SUPABASE_URL},SUPABASE_ANON_KEY=${_SUPABASE_ANON_KEY}
-      - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest
+      - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,TAVILY_API_KEY=mycortex-tavily:latest
 
 images:
   - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
