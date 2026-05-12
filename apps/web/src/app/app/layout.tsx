@@ -69,6 +69,13 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           padding: 14px 24px;
           background: #0f0f0f;
           border-bottom: 1px solid #1a1a1a;
+          flex-wrap: wrap;
+        }
+        @media (max-width: 720px) {
+          .topbar {
+            padding: 10px 14px;
+            gap: 10px;
+          }
         }
         .brand {
           font-weight: 800;
@@ -150,6 +157,7 @@ function NavTabs({ pathname }: { pathname: string }) {
           gap: 4px;
           flex: 1;
           margin-left: 24px;
+          flex-wrap: wrap;
         }
         .tab {
           padding: 6px 14px;
@@ -176,6 +184,22 @@ function NavTabs({ pathname }: { pathname: string }) {
           padding: 1px 7px;
           border-radius: 99px;
           line-height: 1.4;
+        }
+        @media (max-width: 720px) {
+          nav {
+            order: 3;
+            width: 100%;
+            margin-left: 0;
+            margin-top: 4px;
+            overflow-x: auto;
+            flex-wrap: nowrap;
+            padding-bottom: 2px;
+          }
+          .tab {
+            padding: 5px 10px;
+            font-size: 13px;
+            flex-shrink: 0;
+          }
         }
       `}</style>
     </nav>

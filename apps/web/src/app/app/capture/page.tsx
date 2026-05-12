@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { VoiceButton } from '../../../components/VoiceButton';
 import { ingestAudio, ingestText, type IngestResult } from '../../../lib/api';
 
@@ -27,6 +27,13 @@ type State =
 export default function CapturePage() {
   const [text, setText] = useState('');
   const [state, setState] = useState<State>({ kind: 'idle' });
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Auto-focus on mount + after every successful capture so the user can
+  // keep typing in a flow without re-clicking.
+  useEffect(() => {
+    textareaRef.current?.focus();
+  }, [state.kind]);
 
   const submitText = async () => {
     if (!text.trim()) return;
@@ -59,9 +66,17 @@ export default function CapturePage() {
 
       <div className="text-form">
         <textarea
+          ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="…o escribe la nota aquí"
+          onKeyDown={(e) => {
+            // Ctrl/Cmd+Enter sends without leaving the keyboard.
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+              e.preventDefault();
+              void submitText();
+            }
+          }}
+          placeholder="…o escribe la nota aquí (Ctrl+Enter para enviar)"
           rows={3}
           disabled={state.kind === 'sending'}
         />

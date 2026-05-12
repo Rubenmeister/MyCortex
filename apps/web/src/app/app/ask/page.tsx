@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { VoiceButton } from '../../../components/VoiceButton';
 import { ask, type AskResult } from '../../../lib/api';
 
@@ -10,10 +10,50 @@ type State =
   | { kind: 'answered'; result: AskResult }
   | { kind: 'error'; message: string };
 
+/**
+ * History is stored in localStorage so users keep their "thinking trail"
+ * across sessions. We only keep the last 10 entries to bound the size
+ * and we strip the audio blob (TTS base64) since it'd blow up storage —
+ * users can re-trigger TTS by asking again if they need it.
+ */
+const HISTORY_KEY = 'mycortex.askHistory';
+const HISTORY_MAX = 10;
+
+type HistoryEntry = Omit<AskResult, 'audioBase64'> & { askedAt: string };
+
+function loadHistory(): HistoryEntry[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(HISTORY_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as HistoryEntry[];
+    return Array.isArray(parsed) ? parsed.slice(0, HISTORY_MAX) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(entries: HistoryEntry[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, HISTORY_MAX)));
+  } catch {
+    /* quota exceeded etc. — silent */
+  }
+}
+
 export default function AskPage() {
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [text, setText] = useState('');
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Restore history on mount + focus input.
+  useEffect(() => {
+    setHistory(loadHistory());
+    inputRef.current?.focus();
+  }, []);
 
   useEffect(() => {
     if (state.kind === 'answered' && state.result.audioBase64) {
@@ -28,6 +68,26 @@ export default function AskPage() {
     }
   }, [state]);
 
+  const recordAnswer = useCallback((result: AskResult) => {
+    setState({ kind: 'answered', result });
+    // Push to history without audio. Most recent first.
+    const { audioBase64: _audio, ...rest } = result;
+    const entry: HistoryEntry = { ...rest, askedAt: new Date().toISOString() };
+    setHistory((prev) => {
+      // De-dupe consecutive identical questions (rare but possible).
+      const next = prev[0]?.question === entry.question ? prev : [entry, ...prev];
+      const capped = next.slice(0, HISTORY_MAX);
+      saveHistory(capped);
+      return capped;
+    });
+  }, []);
+
+  const clearHistory = () => {
+    if (!confirm('¿Borrar el historial de preguntas?')) return;
+    setHistory([]);
+    saveHistory([]);
+  };
+
   const replay = () => {
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
@@ -39,7 +99,7 @@ export default function AskPage() {
     setState({ kind: 'asking' });
     try {
       const result = await ask({ audioBase64, mimeType, withTTS: true });
-      setState({ kind: 'answered', result });
+      recordAnswer(result);
     } catch (err) {
       setState({ kind: 'error', message: String(err) });
     }
@@ -50,8 +110,10 @@ export default function AskPage() {
     setState({ kind: 'asking' });
     try {
       const result = await ask({ text: text.trim(), withTTS: true });
-      setState({ kind: 'answered', result });
+      recordAnswer(result);
       setText('');
+      // Re-focus for the next question.
+      inputRef.current?.focus();
     } catch (err) {
       setState({ kind: 'error', message: String(err) });
     }
@@ -70,6 +132,7 @@ export default function AskPage() {
 
       <div className="text-form">
         <input
+          ref={inputRef}
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -91,6 +154,25 @@ export default function AskPage() {
             OK
           </button>
         </div>
+      )}
+
+      {history.length > 0 && (
+        <section className="history">
+          <div className="history-head">
+            <h3>Preguntas anteriores ({history.length})</h3>
+            <button type="button" className="clear-btn" onClick={clearHistory}>
+              Borrar historial
+            </button>
+          </div>
+          <ul className="history-list">
+            {history
+              // If we just answered, skip the first entry (already shown above).
+              .slice(state.kind === 'answered' ? 1 : 0)
+              .map((h, idx) => (
+                <HistoryItem key={`${h.askedAt}-${idx}`} entry={h} />
+              ))}
+          </ul>
+        </section>
       )}
 
       <style jsx>{`
@@ -155,6 +237,44 @@ export default function AskPage() {
           color: #ff9b9b;
           padding: 12px 16px;
           border-radius: 10px;
+        }
+        .history {
+          margin-top: 16px;
+        }
+        .history-head {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 10px;
+        }
+        .history h3 {
+          margin: 0;
+          color: #888;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          font-weight: 700;
+        }
+        .clear-btn {
+          background: transparent;
+          border: 1px solid #2a2a3a;
+          color: #888;
+          padding: 4px 10px;
+          border-radius: 6px;
+          font-size: 11px;
+          cursor: pointer;
+        }
+        .clear-btn:hover {
+          color: #fff;
+          border-color: #4a4a5a;
+        }
+        .history-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
         }
       `}</style>
     </div>
@@ -393,4 +513,115 @@ function Answer({ result, onReplay }: { result: AskResult; onReplay: () => void 
       `}</style>
     </div>
   );
+}
+
+function HistoryItem({ entry }: { entry: HistoryEntry }) {
+  const [expanded, setExpanded] = useState(false);
+  const when = new Date(entry.askedAt);
+  const ago = humanAgo(when);
+  return (
+    <li className="hi">
+      <button
+        type="button"
+        className="hi-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="hi-q">❓ {entry.question}</span>
+        <span className="hi-when">{ago}</span>
+      </button>
+      {expanded && (
+        <div className="hi-body">
+          {entry.queryRewritten && entry.searchQuery && (
+            <div className="hi-rewritten">
+              🔎 búsqueda: <code>{entry.searchQuery}</code>
+            </div>
+          )}
+          <div className="hi-a">{entry.answer}</div>
+          <div className="hi-meta">
+            {entry.sources.length} fuente{entry.sources.length === 1 ? '' : 's'}
+            {entry.webSearched && ` · 🌐 web`}
+            {entry.rerankApplied && ` · 🎯 reranked`}
+          </div>
+        </div>
+      )}
+      <style jsx>{`
+        .hi {
+          background: #0c0c12;
+          border: 1px solid #15151c;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+        .hi-toggle {
+          display: flex;
+          width: 100%;
+          gap: 12px;
+          align-items: center;
+          padding: 10px 14px;
+          background: transparent;
+          border: none;
+          cursor: pointer;
+          color: inherit;
+          text-align: left;
+          font-family: inherit;
+          font-size: 13px;
+        }
+        .hi-toggle:hover {
+          background: #14141c;
+        }
+        .hi-q {
+          flex: 1;
+          color: #ddd;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .hi-when {
+          color: #666;
+          font-size: 11px;
+          white-space: nowrap;
+        }
+        .hi-body {
+          padding: 0 14px 14px;
+          border-top: 1px solid #15151c;
+        }
+        .hi-rewritten {
+          color: #6a7a8a;
+          font-size: 11px;
+          margin: 8px 0;
+          font-family: monospace;
+        }
+        .hi-rewritten code {
+          background: #1a1a2a;
+          color: #aac;
+          padding: 1px 6px;
+          border-radius: 3px;
+        }
+        .hi-a {
+          color: #ddd;
+          font-size: 14px;
+          line-height: 1.55;
+          margin-top: 8px;
+          white-space: pre-wrap;
+        }
+        .hi-meta {
+          color: #666;
+          font-size: 11px;
+          margin-top: 10px;
+        }
+      `}</style>
+    </li>
+  );
+}
+
+function humanAgo(d: Date): string {
+  const diffMs = Date.now() - d.getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `${min}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h`;
+  const days = Math.floor(h / 24);
+  if (days < 30) return `${days}d`;
+  return d.toLocaleDateString();
 }
