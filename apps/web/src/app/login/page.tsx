@@ -1,10 +1,35 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { Suspense, useState, type FormEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
 
+/**
+ * Wraps the actual login form in a Suspense boundary because
+ * useSearchParams() in Next.js 15 forces dynamic rendering — without
+ * Suspense the page bails out of static pre-rendering with a build
+ * error. Suspense boundary lets the static shell render while the
+ * client component hydrates with the search params.
+ */
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
+  );
+}
+
+function LoginFormFallback() {
+  // Mirrors LoginForm's shell so users don't see a layout flash before
+  // hydration completes.
+  return (
+    <main style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+      <div style={{ color: '#888' }}>Cargando…</div>
+    </main>
+  );
+}
+
+function LoginForm() {
   const { signIn } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
