@@ -250,6 +250,42 @@ export type SyncSourceUpdate = Partial<
   Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
 >;
 
+// ---- Smart alerts ------------------------------------------------------
+
+export type AlertLevel = 'critical' | 'high' | 'low';
+
+export type SmartAlertRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  node_id: string;
+  level: AlertLevel;
+  title: string;
+  action: string;
+  deadline: string | null;
+  context: string | null;
+  read_at: string | null;
+  dismissed_at: string | null;
+  acted_on_at: string | null;
+  created_at: string;
+};
+
+export type SmartAlertInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  node_id: string;
+  level: AlertLevel;
+  title: string;
+  action: string;
+  deadline?: string | null;
+  context?: string | null;
+};
+
+export type SmartAlertUpdate = Partial<
+  Pick<SmartAlertRow, 'read_at' | 'dismissed_at' | 'acted_on_at'>
+>;
+
 // ---- Workspace invitations --------------------------------------------
 
 export type WorkspaceInvitationRole = 'admin' | 'member' | 'viewer';
@@ -398,6 +434,12 @@ export type Database = {
         Row: WorkspaceInvitationRow;
         Insert: WorkspaceInvitationInsert;
         Update: WorkspaceInvitationUpdate;
+        Relationships: [];
+      };
+      smart_alerts: {
+        Row: SmartAlertRow;
+        Insert: SmartAlertInsert;
+        Update: SmartAlertUpdate;
         Relationships: [];
       };
     };

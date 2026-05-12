@@ -212,6 +212,58 @@ export async function getLatestWeekly(): Promise<DailyDigest | null> {
   return json.digest;
 }
 
+// ---- Smart alerts -------------------------------------------------------
+
+export type AlertLevel = 'critical' | 'high' | 'low';
+
+export type SmartAlert = {
+  id: string;
+  workspace_id: string;
+  node_id: string;
+  level: AlertLevel;
+  title: string;
+  action: string;
+  deadline: string | null;
+  context: string | null;
+  read_at: string | null;
+  dismissed_at: string | null;
+  acted_on_at: string | null;
+  created_at: string;
+};
+
+export async function listAlerts(
+  opts: { all?: boolean; limit?: number } = {},
+): Promise<SmartAlert[]> {
+  const url = new URL(`${API_URL}/cortex/alerts`);
+  if (opts.all) url.searchParams.set('all', '1');
+  if (opts.limit) url.searchParams.set('limit', String(opts.limit));
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`alerts ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { alerts: SmartAlert[] };
+  return json.alerts;
+}
+
+export async function getAlertsUnreadCount(): Promise<number> {
+  const res = await fetch(`${API_URL}/cortex/alerts/unread-count`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) return 0;
+  const json = (await res.json()) as { count: number };
+  return json.count;
+}
+
+export async function actOnAlert(
+  id: string,
+  action: 'read' | 'dismiss' | 'acted' | 'reopen',
+): Promise<void> {
+  const res = await fetch(`${API_URL}/cortex/alerts/${id}/action`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ action }),
+  });
+  if (!res.ok) throw new Error(`alert ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
 export async function listDigests(
   limit = 14,
   kind?: DigestKind,

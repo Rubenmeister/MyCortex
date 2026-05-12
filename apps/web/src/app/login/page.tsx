@@ -13,6 +13,8 @@ import { useAuth } from '../../lib/auth';
  */
 export default function LoginPage() {
   return (
+    // @ts-expect-error — multi-version @types/react in workspace (mobile=18,
+    // web=19) confuses JSX type unification on Suspense. Runtime is fine.
     <Suspense fallback={<LoginFormFallback />}>
       <LoginForm />
     </Suspense>

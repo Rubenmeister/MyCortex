@@ -1,16 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '../../lib/auth';
-import { WorkspaceProvider } from '../../lib/workspace';
+import { WorkspaceProvider, useWorkspace } from '../../lib/workspace';
 import { WorkspaceSwitcher } from '../../components/WorkspaceSwitcher';
+import { getAlertsUnreadCount } from '../../lib/api';
 
 const TABS = [
   { href: '/app/capture', label: 'Capturar', icon: '✎' },
   { href: '/app/ask', label: 'Preguntar', icon: '💬' },
   { href: '/app/digest', label: 'Briefing', icon: '☀️' },
+  { href: '/app/alerts', label: 'Alertas', icon: '🚨' },
   { href: '/app/nodes', label: 'Notas', icon: '☰' },
   { href: '/app/settings', label: 'Ajustes', icon: '⚙' },
 ];
@@ -38,17 +40,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <header className="topbar">
           <div className="brand">MyCortex</div>
           <WorkspaceSwitcher />
-          <nav>
-            {TABS.map((t) => {
-              const active = pathname === t.href || (t.href === '/app/capture' && pathname === '/app');
-              return (
-                <Link key={t.href} href={t.href} className={active ? 'tab tab-active' : 'tab'}>
-                  <span style={{ marginRight: 6 }}>{t.icon}</span>
-                  {t.label}
-                </Link>
-              );
-            })}
-          </nav>
+          <NavTabs pathname={pathname} />
+
           <div className="user">
             <span style={{ color: '#888', fontSize: 12 }}>{session.user.email}</span>
             <button
@@ -81,26 +74,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           font-weight: 800;
           font-size: 18px;
         }
-        nav {
-          display: flex;
-          gap: 4px;
-          flex: 1;
-          margin-left: 24px;
-        }
-        .tab {
-          padding: 6px 14px;
-          border-radius: 8px;
-          color: #aaa;
-          text-decoration: none;
-          font-size: 14px;
-        }
-        .tab:hover {
-          background: #1a1a1a;
-        }
-        .tab-active {
-          background: #1a1a1a;
-          color: #fff;
-        }
         .user {
           display: flex;
           align-items: center;
@@ -125,5 +98,86 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       `}</style>
       </div>
     </WorkspaceProvider>
+  );
+}
+
+/**
+ * Renders the nav inside WorkspaceProvider so it can subscribe to the
+ * current workspace and refresh the alerts unread count when the user
+ * switches contexts. Polls every 60s — cheap (1 indexed count query)
+ * and keeps the badge fresh without needing realtime subscriptions.
+ */
+function NavTabs({ pathname }: { pathname: string }) {
+  const { current } = useWorkspace();
+  const [unread, setUnread] = useState<number>(0);
+
+  useEffect(() => {
+    if (!current) return;
+    let cancelled = false;
+    const fetchCount = async () => {
+      try {
+        const n = await getAlertsUnreadCount();
+        if (!cancelled) setUnread(n);
+      } catch {
+        /* badge is a nice-to-have, fail silently */
+      }
+    };
+    void fetchCount();
+    const id = setInterval(fetchCount, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [current]);
+
+  return (
+    <nav>
+      {TABS.map((t) => {
+        const active =
+          pathname === t.href || (t.href === '/app/capture' && pathname === '/app');
+        const showBadge = t.href === '/app/alerts' && unread > 0;
+        return (
+          <Link key={t.href} href={t.href} className={active ? 'tab tab-active' : 'tab'}>
+            <span style={{ marginRight: 6 }}>{t.icon}</span>
+            {t.label}
+            {showBadge && <span className="tab-badge">{unread > 99 ? '99+' : unread}</span>}
+          </Link>
+        );
+      })}
+      <style jsx>{`
+        nav {
+          display: flex;
+          gap: 4px;
+          flex: 1;
+          margin-left: 24px;
+        }
+        .tab {
+          padding: 6px 14px;
+          border-radius: 8px;
+          color: #aaa;
+          text-decoration: none;
+          font-size: 14px;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .tab:hover {
+          background: #1a1a1a;
+        }
+        .tab-active {
+          background: #1a1a1a;
+          color: #fff;
+        }
+        .tab-badge {
+          background: #d33;
+          color: #fff;
+          font-size: 10px;
+          font-weight: 700;
+          padding: 1px 7px;
+          border-radius: 99px;
+          line-height: 1.4;
+        }
+      `}</style>
+    </nav>
   );
 }

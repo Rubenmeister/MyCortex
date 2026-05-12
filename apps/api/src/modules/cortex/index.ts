@@ -92,6 +92,113 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
     return reply.code(200).send({ digest: data });
   });
 
+  /**
+   * Smart alerts: real-time urgency items detected by the cortex-alerts
+   * worker. The list endpoint returns OPEN alerts (not dismissed, not
+   * acted on) by default; pass ?all=1 for everything including resolved.
+   * Mark endpoints update the timestamp columns to track lifecycle.
+   */
+  server.get('/alerts', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const q = z
+      .object({
+        all: z.coerce.boolean().optional(),
+        limit: z.coerce.number().int().min(1).max(100).default(50),
+      })
+      .safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    let query = auth.db
+      .from('smart_alerts')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      // critical first, then high, then low, ties broken by recency.
+      .order('level', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(q.data.limit);
+    if (!q.data.all) {
+      query = query.is('dismissed_at', null).is('acted_on_at', null);
+    }
+    const { data, error } = await query;
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ alerts: data ?? [] });
+  });
+
+  /**
+   * Compact unread count for the nav badge. Cheap so the FE can poll it.
+   */
+  server.get('/alerts/unread-count', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+
+    const { count, error } = await auth.db
+      .from('smart_alerts')
+      .select('id', { count: 'exact', head: true })
+      .eq('workspace_id', auth.workspaceId)
+      .is('read_at', null)
+      .is('dismissed_at', null)
+      .is('acted_on_at', null);
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ count: count ?? 0 });
+  });
+
+  const AlertActionParams = z.object({ id: z.string().uuid() });
+  const AlertActionBody = z.object({
+    action: z.enum(['read', 'dismiss', 'acted', 'reopen']),
+  });
+
+  /**
+   * Lifecycle transitions on an alert.
+   *   read     → mark as seen (badge clears)
+   *   dismiss  → "not relevant" — hides from default list
+   *   acted    → "done" — hides from default list, tracks completion
+   *   reopen   → undo dismiss/acted, brings back to open list
+   */
+  server.post('/alerts/:id/action', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = AlertActionParams.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+    const body = AlertActionBody.safeParse(req.body);
+    if (!body.success) return reply.code(400).send({ error: 'invalid_action' });
+
+    const now = new Date().toISOString();
+    // Typed precisely so Supabase accepts it. Each action writes a
+    // specific subset of the 3 lifecycle columns.
+    const update: {
+      read_at?: string;
+      dismissed_at?: string | null;
+      acted_on_at?: string | null;
+    } = {};
+    switch (body.data.action) {
+      case 'read':
+        update.read_at = now;
+        break;
+      case 'dismiss':
+        update.dismissed_at = now;
+        // Auto-mark read so the badge clears.
+        update.read_at = now;
+        break;
+      case 'acted':
+        update.acted_on_at = now;
+        update.read_at = now;
+        break;
+      case 'reopen':
+        update.dismissed_at = null;
+        update.acted_on_at = null;
+        break;
+    }
+
+    const { error } = await auth.db
+      .from('smart_alerts')
+      .update(update)
+      .eq('id', params.data.id)
+      .eq('workspace_id', auth.workspaceId);
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ ok: true });
+  });
+
   server.get('/digest/list', async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
