@@ -17,14 +17,13 @@ import {
  * "reunión con John" → finds the event whose attendees include John.
  */
 
-// Google migrated to granular Calendar scopes in 2024 — unverified apps in
-// Production status can no longer use the unified `calendar.readonly`. We
-// request the two equivalent granular scopes together:
-//   - calendar.calendarlist.readonly → list the user's calendars
-//   - calendar.events.readonly       → read events from any of those calendars
+// Calendar OAuth scopes: we request the unified `calendar.readonly` which
+// covers BOTH calendar listing AND event reading. Some app configurations
+// only expose the granular replacements (calendarlist.readonly +
+// events.readonly) in the Consent Screen picker — the callback validation
+// in api/integrations/index.ts accepts either grant path.
 const CALENDAR_SCOPES = [
-  'https://www.googleapis.com/auth/calendar.calendarlist.readonly',
-  'https://www.googleapis.com/auth/calendar.events.readonly',
+  'https://www.googleapis.com/auth/calendar.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
   'https://www.googleapis.com/auth/userinfo.profile',
 ] as const;

@@ -551,24 +551,21 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
       return reply.redirect(`${back}?calendar_error=token_exchange_failed`);
     }
 
-    // Granular consent: we need BOTH calendarlist + events readonly scopes to
-    // actually be able to enumerate calendars AND read their events. Either
-    // one alone is useless.
+    // Calendar access can come via either:
+    //   - the unified `calendar.readonly` scope (covers everything), OR
+    //   - both granular scopes (calendarlist.readonly + events.readonly).
+    // We accept either path because Google's OAuth Consent Screen picker
+    // shows different sets depending on app status; both grants give us
+    // what the worker needs to enumerate calendars + read events.
     const grantedScopes = new Set(tokens.scope.split(/\s+/).filter(Boolean));
-    const missingScopes: string[] = [];
-    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.calendarlist.readonly')) {
-      missingScopes.push('calendar.calendarlist.readonly');
-    }
-    if (!grantedScopes.has('https://www.googleapis.com/auth/calendar.events.readonly')) {
-      missingScopes.push('calendar.events.readonly');
-    }
-    if (missingScopes.length > 0) {
-      req.log.warn(
-        { scope: tokens.scope, missing: missingScopes },
-        'calendar_scope_missing',
-      );
+    const hasUnified = grantedScopes.has('https://www.googleapis.com/auth/calendar.readonly');
+    const hasGranular =
+      grantedScopes.has('https://www.googleapis.com/auth/calendar.calendarlist.readonly') &&
+      grantedScopes.has('https://www.googleapis.com/auth/calendar.events.readonly');
+    if (!hasUnified && !hasGranular) {
+      req.log.warn({ scope: tokens.scope }, 'calendar_scope_missing');
       return reply.redirect(
-        `${back}?calendar_error=missing_calendar_scope&granted=${encodeURIComponent(tokens.scope)}&missing=${encodeURIComponent(missingScopes.join(','))}`,
+        `${back}?calendar_error=missing_calendar_scope&granted=${encodeURIComponent(tokens.scope)}`,
       );
     }
 
