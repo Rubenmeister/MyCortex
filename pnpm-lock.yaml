@@ -81,6 +81,9 @@ importers:
 
   apps/bot-telegram:
     dependencies:
+      '@mycortex/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@mycortex/shared-types':
         specifier: workspace:*
         version: link:../../packages/shared-types

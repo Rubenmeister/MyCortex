@@ -25,6 +25,11 @@ const EnvSchema = z.object({
   /** From address for outbound mails. Defaults to a Resend sandbox sender. */
   RESEND_FROM_EMAIL: optKey,
 
+  /** Telegram bot username (without @) — used to build the t.me deep link
+   *  for the multi-user linking flow. Optional: if not set, the UI shows
+   *  the token to copy/paste manually. */
+  TELEGRAM_BOT_USERNAME: optKey,
+
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
   // disable themselves if these aren't configured. Each provider has its
   // own redirect URI registered in Google Cloud Console.

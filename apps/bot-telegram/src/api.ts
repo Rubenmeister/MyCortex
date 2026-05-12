@@ -35,6 +35,17 @@ export type RecentNode = {
 };
 
 /**
+ * Identity context for a Telegram message: which MyCortex user owns it
+ * and which workspace it should land in. Resolved either from a
+ * telegram_links row (multi-user mode) or the TELEGRAM_DEFAULT_USER_ID
+ * fallback (legacy single-user mode, no workspace_id → personal).
+ */
+export type BotIdentity = {
+  userId: string;
+  workspaceId?: string;
+};
+
+/**
  * Server-to-server client. Uses service-role key + user_id header for the
  * api's "admin trust" auth path. Only safe inside trusted services like
  * this bot — never call from clients that hold user credentials.
@@ -42,18 +53,20 @@ export type RecentNode = {
 export class ApiClient {
   constructor(private readonly cfg: Config) {}
 
-  private headers(userId: string): Record<string, string> {
-    return {
+  private headers(id: BotIdentity): Record<string, string> {
+    const h: Record<string, string> = {
       Authorization: `Bearer ${this.cfg.SUPABASE_SERVICE_ROLE_KEY}`,
-      'X-MyCortex-User-Id': userId,
+      'X-MyCortex-User-Id': id.userId,
       'Content-Type': 'application/json',
     };
+    if (id.workspaceId) h['X-MyCortex-Workspace-Id'] = id.workspaceId;
+    return h;
   }
 
-  private async post<T>(path: string, userId: string, body?: unknown): Promise<T> {
+  private async post<T>(path: string, id: BotIdentity, body?: unknown): Promise<T> {
     const res = await fetch(`${this.cfg.API_URL}${path}`, {
       method: 'POST',
-      headers: this.headers(userId),
+      headers: this.headers(id),
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
@@ -62,23 +75,23 @@ export class ApiClient {
     return res.json() as Promise<T>;
   }
 
-  private async get<T>(path: string, userId: string): Promise<T> {
-    const res = await fetch(`${this.cfg.API_URL}${path}`, { headers: this.headers(userId) });
+  private async get<T>(path: string, id: BotIdentity): Promise<T> {
+    const res = await fetch(`${this.cfg.API_URL}${path}`, { headers: this.headers(id) });
     if (!res.ok) {
       throw new Error(`api ${path} failed: ${res.status} ${await res.text()}`);
     }
     return res.json() as Promise<T>;
   }
 
-  ingest(userId: string, params: { source: string; text?: string; title?: string }): Promise<IngestResponse> {
-    return this.post('/ingesta', userId, params);
+  ingest(id: BotIdentity, params: { source: string; text?: string; title?: string }): Promise<IngestResponse> {
+    return this.post('/ingesta', id, params);
   }
 
-  runCortex(userId: string): Promise<CortexRunResponse> {
-    return this.post('/cortex/run', userId);
+  runCortex(id: BotIdentity): Promise<CortexRunResponse> {
+    return this.post('/cortex/run', id);
   }
 
-  recentNodes(userId: string, limit = 5): Promise<{ nodes: RecentNode[] }> {
-    return this.get(`/cortex/nodes?limit=${limit}`, userId);
+  recentNodes(id: BotIdentity, limit = 5): Promise<{ nodes: RecentNode[] }> {
+    return this.get(`/cortex/nodes?limit=${limit}`, id);
   }
 }

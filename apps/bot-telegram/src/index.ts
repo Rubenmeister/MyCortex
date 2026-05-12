@@ -5,8 +5,9 @@ loadDotenv({ override: true });
 
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
+import { createDb } from '@mycortex/db';
 import { loadConfig } from './config.js';
-import { ApiClient } from './api.js';
+import { ApiClient, type BotIdentity } from './api.js';
 import { transcribe } from './whisper.js';
 import { formatCortexRun, formatIngest, formatRecent } from './formatters.js';
 
@@ -14,42 +15,163 @@ const cfg = loadConfig();
 const api = new ApiClient(cfg);
 const bot = new Telegraf(cfg.TELEGRAM_BOT_TOKEN);
 
+// Service-role DB client for telegram_links lookups + token validation.
+const db = createDb(cfg.SUPABASE_URL, cfg.SUPABASE_SERVICE_ROLE_KEY);
+
 /**
- * MVP single-user mapping. Every chat ingests as TELEGRAM_DEFAULT_USER_ID.
- * When we add multi-tenant: replace with a SELECT against telegram_links
- * (chat_id, user_id) and a /link command for onboarding.
+ * Resolve which MyCortex user (and which workspace) a Telegram chat
+ * belongs to. Multi-user mode is preferred; falls back to the legacy
+ * TELEGRAM_DEFAULT_USER_ID env so users who haven't migrated still
+ * get their messages ingested.
+ *
+ * Returns null if there's no link AND no fallback — the caller should
+ * tell the chat to vinculate first.
  */
-function userIdFor(_chatId: number): string {
-  return cfg.TELEGRAM_DEFAULT_USER_ID;
+async function identityFor(chatId: number): Promise<BotIdentity | null> {
+  const { data } = await db
+    .from('telegram_links')
+    .select('user_id, workspace_id')
+    .eq('chat_id', chatId)
+    .maybeSingle();
+  if (data) {
+    return { userId: data.user_id, workspaceId: data.workspace_id };
+  }
+  if (cfg.TELEGRAM_DEFAULT_USER_ID) {
+    return { userId: cfg.TELEGRAM_DEFAULT_USER_ID };
+  }
+  return null;
+}
+
+const UNLINKED_HINT =
+  'No estás vinculado a una cuenta de MyCortex.\n\n' +
+  '1. Abrí MyCortex web → *Ajustes → Vincular Telegram*\n' +
+  '2. Click el botón "Vincular" y abrí el link aquí\n' +
+  '3. Vuelvo a estar a tus órdenes';
+
+/**
+ * Handle /start TOKEN (deep-link from the web). Validates the token,
+ * upserts a telegram_links row, marks the token consumed. The chat is
+ * now linked for all future messages.
+ */
+async function handleLinkPayload(
+  chatId: number,
+  payload: string,
+  telegramUser: { username?: string; firstName?: string },
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  const { data: tok, error: lookupErr } = await db
+    .from('telegram_link_tokens')
+    .select('*')
+    .eq('token', payload)
+    .maybeSingle();
+  if (lookupErr) return { ok: false, reason: 'lookup_failed' };
+  if (!tok) return { ok: false, reason: 'token_not_found' };
+  if (tok.used_at) return { ok: false, reason: 'token_already_used' };
+  if (new Date(tok.expires_at).getTime() < Date.now()) {
+    return { ok: false, reason: 'token_expired' };
+  }
+
+  const { error: upsertErr } = await db
+    .from('telegram_links')
+    .upsert(
+      {
+        chat_id: chatId,
+        user_id: tok.user_id,
+        workspace_id: tok.workspace_id,
+        telegram_username: telegramUser.username ?? null,
+        telegram_first_name: telegramUser.firstName ?? null,
+        linked_by_token: payload,
+      },
+      { onConflict: 'chat_id' },
+    );
+  if (upsertErr) return { ok: false, reason: 'link_save_failed' };
+
+  await db
+    .from('telegram_link_tokens')
+    .update({ used_at: new Date().toISOString(), used_by_chat_id: chatId })
+    .eq('token', payload);
+
+  return { ok: true };
 }
 
 bot.start(async (ctx) => {
   const name = ctx.from?.first_name ?? 'there';
-  await ctx.reply(
-    `👋 Hola ${name}, soy CORTEX.\n\n` +
-      `Envíame *texto* o *audio* y lo capturo en tu segundo cerebro. ` +
-      `Yo lo clasifico, le pongo título, genero embedding y lo conecto con notas similares.\n\n` +
-      `*Comandos:*\n` +
-      `/last — tus últimas 5 notas\n` +
-      `/cortex — disparar capa de evolución\n` +
-      `/help — esta ayuda`,
-    { parse_mode: 'Markdown' },
-  );
+  // Telegram /start can carry a payload after a deep-link:
+  // https://t.me/MyBot?start=TOKEN. Telegraf surfaces it as startPayload.
+  const payload = (ctx as { startPayload?: string }).startPayload;
+
+  if (payload) {
+    const result = await handleLinkPayload(ctx.chat.id, payload, {
+      username: ctx.from?.username,
+      firstName: ctx.from?.first_name,
+    });
+    if (result.ok) {
+      await ctx.reply(
+        `✅ Vinculado, ${name}.\n\n` +
+          `Lo que me mandes a partir de ahora se guarda en *tu* segundo cerebro.\n\n` +
+          `*Comandos:*\n` +
+          `/last — tus últimas 5 notas\n` +
+          `/cortex — disparar evolución\n` +
+          `/help — ayuda`,
+        { parse_mode: 'Markdown' },
+      );
+      return;
+    }
+    const reasonMsg =
+      result.reason === 'token_expired'
+        ? '⏰ Ese link de vinculación expiró. Generá uno nuevo desde MyCortex web.'
+        : result.reason === 'token_already_used'
+          ? '🔁 Ese link ya se usó. Generá uno nuevo desde MyCortex web.'
+          : '❌ Link de vinculación inválido. Generá uno nuevo desde MyCortex web.';
+    await ctx.reply(reasonMsg);
+    return;
+  }
+
+  // No payload — generic welcome. Check if they're already linked.
+  const id = await identityFor(ctx.chat.id);
+  if (id) {
+    await ctx.reply(
+      `👋 Hola ${name}, ya estás vinculado.\n\n` +
+        `Mandame texto o audio para capturar. /last para ver tus últimas notas.`,
+    );
+    return;
+  }
+
+  await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
 });
 
 bot.help((ctx) =>
   ctx.reply(
-    'Mándame texto o audio. Comandos: /last (últimas notas), /cortex (run evolución).',
+    'Mandame texto o audio. Comandos:\n' +
+      '/last — últimas notas\n' +
+      '/cortex — run evolución\n' +
+      '/whoami — qué cuenta tengo linkeada',
   ),
 );
+
+bot.command('whoami', async (ctx) => {
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
+  await ctx.reply(
+    `Linkeado a:\n• user_id: \`${id.userId}\`\n• workspace: \`${id.workspaceId ?? 'personal (default)'}\``,
+    { parse_mode: 'Markdown' },
+  );
+});
 
 bot.on(message('text'), async (ctx) => {
   const text = ctx.message.text;
   if (text.startsWith('/')) return; // commands handled by their own routes
-  const userId = userIdFor(ctx.chat.id);
+
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
 
   try {
-    const res = await api.ingest(userId, { source: 'telegram', text });
+    const res = await api.ingest(id, { source: 'telegram', text });
     await ctx.reply(formatIngest(res), { parse_mode: 'Markdown' });
   } catch (err) {
     ctx.telegram.sendMessage(ctx.chat.id, `❌ ${String(err).slice(0, 200)}`).catch(() => {});
@@ -57,7 +179,11 @@ bot.on(message('text'), async (ctx) => {
 });
 
 bot.on(message('voice'), async (ctx) => {
-  const userId = userIdFor(ctx.chat.id);
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
   if (!cfg.OPENAI_API_KEY) {
     await ctx.reply('🔇 No tengo OPENAI_API_KEY configurado, no puedo transcribir.');
     return;
@@ -75,7 +201,7 @@ bot.on(message('voice'), async (ctx) => {
       language: 'es',
     });
 
-    const res = await api.ingest(userId, { source: 'telegram', text });
+    const res = await api.ingest(id, { source: 'telegram', text });
 
     await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
     await ctx.reply(formatIngest(res, text), { parse_mode: 'Markdown' });
@@ -86,9 +212,13 @@ bot.on(message('voice'), async (ctx) => {
 });
 
 bot.command('last', async (ctx) => {
-  const userId = userIdFor(ctx.chat.id);
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
   try {
-    const { nodes } = await api.recentNodes(userId, 5);
+    const { nodes } = await api.recentNodes(id, 5);
     await ctx.reply(formatRecent(nodes), { parse_mode: 'Markdown' });
   } catch (err) {
     await ctx.reply(`❌ ${String(err).slice(0, 200)}`);
@@ -96,10 +226,14 @@ bot.command('last', async (ctx) => {
 });
 
 bot.command('cortex', async (ctx) => {
-  const userId = userIdFor(ctx.chat.id);
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
   const wait = await ctx.reply('🧠 Ejecutando evolución...');
   try {
-    const summary = await api.runCortex(userId);
+    const summary = await api.runCortex(id);
     await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
     await ctx.reply(formatCortexRun(summary), { parse_mode: 'Markdown' });
   } catch (err) {
@@ -118,7 +252,16 @@ bot.catch((err, ctx) => {
 });
 
 await bot.launch(() => {
-  console.log(JSON.stringify({ level: 'info', msg: 'bot_started', defaultUserId: cfg.TELEGRAM_DEFAULT_USER_ID }));
+  console.log(
+    JSON.stringify({
+      level: 'info',
+      msg: 'bot_started',
+      multiUser: true,
+      defaultUserFallback: cfg.TELEGRAM_DEFAULT_USER_ID
+        ? `${cfg.TELEGRAM_DEFAULT_USER_ID.slice(0, 8)}…`
+        : 'none',
+    }),
+  );
 });
 
 process.once('SIGINT', () => bot.stop('SIGINT'));

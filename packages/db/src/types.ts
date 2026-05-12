@@ -250,6 +250,44 @@ export type SyncSourceUpdate = Partial<
   Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
 >;
 
+// ---- Telegram links ----------------------------------------------------
+
+export type TelegramLinkRow = {
+  chat_id: number;
+  user_id: string;
+  workspace_id: string;
+  telegram_username: string | null;
+  telegram_first_name: string | null;
+  linked_at: string;
+  linked_by_token: string | null;
+};
+
+export type TelegramLinkInsert = {
+  chat_id: number;
+  user_id: string;
+  workspace_id: string;
+  telegram_username?: string | null;
+  telegram_first_name?: string | null;
+  linked_by_token?: string | null;
+};
+
+export type TelegramLinkTokenRow = {
+  token: string;
+  user_id: string;
+  workspace_id: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by_chat_id: number | null;
+};
+
+export type TelegramLinkTokenInsert = {
+  token: string;
+  user_id: string;
+  workspace_id: string;
+  expires_at?: string;
+};
+
 // ---- Smart alerts ------------------------------------------------------
 
 export type AlertLevel = 'critical' | 'high' | 'low';
@@ -440,6 +478,18 @@ export type Database = {
         Row: SmartAlertRow;
         Insert: SmartAlertInsert;
         Update: SmartAlertUpdate;
+        Relationships: [];
+      };
+      telegram_links: {
+        Row: TelegramLinkRow;
+        Insert: TelegramLinkInsert;
+        Update: Partial<TelegramLinkInsert>;
+        Relationships: [];
+      };
+      telegram_link_tokens: {
+        Row: TelegramLinkTokenRow;
+        Insert: TelegramLinkTokenInsert;
+        Update: Partial<TelegramLinkTokenRow>;
         Relationships: [];
       };
     };

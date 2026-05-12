@@ -7,8 +7,13 @@ const optKey = z.preprocess(
 
 const EnvSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1),
-  TELEGRAM_DEFAULT_USER_ID: z.string().uuid(),
+  // Legacy single-user fallback. New flow uses telegram_links table.
+  // When TELEGRAM_DEFAULT_USER_ID is set AND an incoming chat is NOT in
+  // telegram_links, the bot still routes to the default user — this keeps
+  // your original chat working until you re-link.
+  TELEGRAM_DEFAULT_USER_ID: z.string().uuid().optional(),
   API_URL: z.string().url().default('http://localhost:4000'),
+  SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   OPENAI_API_KEY: optKey,
 });

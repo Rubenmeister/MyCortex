@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../../lib/auth.js';
@@ -656,6 +657,94 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
     } catch (err) {
       return reply.code(502).send({ error: 'calendar_list_failed', detail: String(err).slice(0, 200) });
     }
+  });
+
+  // ---- Telegram multi-user linking ---------------------------------------
+
+  /**
+   * POST /integrations/telegram/start-link
+   *
+   * Generates a one-time token (valid 15 min) bound to the current
+   * (user, workspace). Returns the token + a t.me deep link the FE can
+   * render as a "Open in Telegram" button. When the user opens the link,
+   * the bot receives /start TOKEN and validates it server-side.
+   */
+  server.post('/telegram/start-link', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const env = getEnv();
+
+    // 256-bit token, base64url. Safe in URLs and Telegram's start payload
+    // (max 64 chars; we generate 43 char tokens).
+    const token = randomBytes(32).toString('base64url');
+
+    const { error } = await getDb()
+      .from('telegram_link_tokens')
+      .insert({
+        token,
+        user_id: auth.userId,
+        workspace_id: auth.workspaceId,
+      });
+    if (error) {
+      return reply.code(500).send({ error: 'db_error', detail: error.message });
+    }
+
+    const botUsername = env.TELEGRAM_BOT_USERNAME;
+    const deepLink = botUsername ? `https://t.me/${botUsername}?start=${token}` : null;
+
+    return reply.code(200).send({
+      token,
+      deep_link: deepLink,
+      bot_username: botUsername,
+      // 15 min from now; matches the migration default.
+      expires_at: new Date(Date.now() + 15 * 60_000).toISOString(),
+    });
+  });
+
+  /**
+   * GET /integrations/telegram/links
+   *
+   * Returns the user's current Telegram links (across all workspaces they
+   * belong to). UI shows which chat is linked + an "unlink" action.
+   */
+  server.get('/telegram/links', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+
+    const { data, error } = await getDb()
+      .from('telegram_links')
+      .select('chat_id, workspace_id, telegram_username, telegram_first_name, linked_at')
+      .eq('user_id', auth.userId)
+      .order('linked_at', { ascending: false });
+    if (error) {
+      return reply.code(500).send({ error: 'db_error', detail: error.message });
+    }
+    return reply.code(200).send({ links: data ?? [] });
+  });
+
+  /**
+   * DELETE /integrations/telegram/links/:chatId
+   *
+   * Unlinks a Telegram chat. Future messages from that chat will be
+   * rejected by the bot until re-linked.
+   */
+  server.delete('/telegram/links/:chatId', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z
+      .object({ chatId: z.coerce.number().int() })
+      .safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_chat_id' });
+
+    const { error } = await getDb()
+      .from('telegram_links')
+      .delete()
+      .eq('chat_id', params.data.chatId)
+      .eq('user_id', auth.userId);
+    if (error) {
+      return reply.code(500).send({ error: 'db_error', detail: error.message });
+    }
+    return reply.code(204).send();
   });
 };
 

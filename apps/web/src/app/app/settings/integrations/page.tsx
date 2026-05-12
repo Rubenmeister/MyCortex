@@ -5,6 +5,13 @@ import { useSearchParams } from 'next/navigation';
 import { publicConfig } from '../../../../lib/publicConfig';
 import { supabase } from '../../../../lib/supabase';
 import { useWorkspace } from '../../../../lib/workspace';
+import {
+  listTelegramLinks,
+  startTelegramLink,
+  unlinkTelegram,
+  type TelegramLink,
+  type TelegramStartLinkResult,
+} from '../../../../lib/api';
 
 type Integration = {
   id: string;
@@ -369,6 +376,8 @@ export default function IntegrationsPage() {
       {calendar && calendar.status === 'active' && (
         <CalendarsList integration={calendar} workspaceId={current?.id ?? ''} />
       )}
+
+      <TelegramSection />
 
       <section className="card disabled">
         <div className="head">
@@ -1396,6 +1405,183 @@ function CalendarsList({
         .picker-list { overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
         .picker-item { background: transparent; border: 1px solid transparent; color: #ddd; text-align: left; padding: 10px 12px; border-radius: 8px; font-size: 14px; cursor: pointer; }
         .picker-item:hover { background: #1a1a2a; border-color: #2a2a3a; }
+      `}</style>
+    </section>
+  );
+}
+
+function TelegramSection() {
+  const [links, setLinks] = useState<TelegramLink[] | null>(null);
+  const [pending, setPending] = useState<TelegramStartLinkResult | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setErr(null);
+    try {
+      const list = await listTelegramLinks();
+      setLinks(list);
+    } catch (e) {
+      setErr(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const onStartLink = async () => {
+    setBusy('start');
+    setErr(null);
+    try {
+      const result = await startTelegramLink();
+      setPending(result);
+      if (result.deep_link) {
+        // Best-effort: open Telegram. Browsers may block if no user gesture
+        // (but this IS triggered by a click, so it works).
+        window.open(result.deep_link, '_blank', 'noopener,noreferrer');
+      }
+      // Re-poll links every 3s for up to 60s so the UI updates when the
+      // user finishes the linking in Telegram.
+      let attempts = 0;
+      const interval = setInterval(async () => {
+        attempts += 1;
+        await load();
+        if (attempts >= 20) clearInterval(interval);
+      }, 3000);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onUnlink = async (chatId: number) => {
+    if (!confirm('¿Desvincular este chat de Telegram? Los mensajes futuros del chat no se ingestarán.')) {
+      return;
+    }
+    setBusy(`unlink-${chatId}`);
+    try {
+      await unlinkTelegram(chatId);
+      await load();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="card">
+      <div className="head">
+        <span className="provider-icon">📲</span>
+        <div>
+          <div className="provider-name">Telegram</div>
+          <div className="provider-desc">
+            Mandale texto o audio al bot @MyCortex desde tu Telegram. Cada miembro vincula su propio chat — los mensajes se guardan en su cuenta.
+          </div>
+        </div>
+      </div>
+
+      {err && <div className="alert alert-err">{err}</div>}
+
+      {links && links.length > 0 ? (
+        <ul className="src-list" style={{ marginBottom: 14 }}>
+          {links.map((l) => (
+            <li key={l.chat_id}>
+              <div className="src-name">
+                📲 {l.telegram_first_name ?? l.telegram_username ?? `chat ${l.chat_id}`}
+                {l.telegram_username && (
+                  <span style={{ color: '#888', marginLeft: 6 }}>@{l.telegram_username}</span>
+                )}
+              </div>
+              <div className="src-meta">
+                vinculado {new Date(l.linked_at).toLocaleString()}
+              </div>
+              <button
+                type="button"
+                className="src-rm"
+                onClick={() => onUnlink(l.chat_id)}
+                disabled={busy === `unlink-${l.chat_id}`}
+              >
+                Desvincular
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="muted" style={{ marginBottom: 14, fontSize: 13 }}>
+          {links === null
+            ? 'Cargando…'
+            : 'Aún no tenés Telegram vinculado. Click abajo para empezar.'}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={onStartLink}
+        disabled={busy === 'start'}
+      >
+        {busy === 'start' ? '…' : 'Vincular Telegram'}
+      </button>
+
+      {pending && (
+        <div className="tg-pending">
+          <div className="tg-pending-title">⏳ Esperando que vincules en Telegram</div>
+          <div className="tg-pending-sub">
+            {pending.deep_link ? (
+              <>
+                Si no se abrió automáticamente, click:{' '}
+                <a href={pending.deep_link} target="_blank" rel="noopener noreferrer">
+                  Abrir Telegram →
+                </a>
+              </>
+            ) : (
+              <>
+                El bot no está configurado con username. Abrí el bot y mandá:{' '}
+                <code>/start {pending.token.slice(0, 20)}…</code>
+              </>
+            )}
+          </div>
+          <div className="tg-pending-sub" style={{ marginTop: 6, fontSize: 11 }}>
+            Token válido hasta {new Date(pending.expires_at).toLocaleTimeString()}.
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .tg-pending {
+          margin-top: 14px;
+          padding: 12px 14px;
+          background: #1a2030;
+          border: 1px dashed #2a3a4a;
+          border-radius: 8px;
+        }
+        .tg-pending-title {
+          color: #aac;
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 4px;
+        }
+        .tg-pending-sub {
+          color: #889;
+          font-size: 12px;
+        }
+        .tg-pending-sub :global(a) {
+          color: #aaf;
+          text-decoration: none;
+        }
+        .tg-pending-sub :global(a:hover) {
+          text-decoration: underline;
+        }
+        .tg-pending-sub :global(code) {
+          background: #0a0a14;
+          color: #aac;
+          padding: 1px 6px;
+          border-radius: 3px;
+          font-size: 11px;
+        }
       `}</style>
     </section>
   );

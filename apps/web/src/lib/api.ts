@@ -212,6 +212,55 @@ export async function getLatestWeekly(): Promise<DailyDigest | null> {
   return json.digest;
 }
 
+// ---- Telegram multi-user linking ---------------------------------------
+
+export type TelegramLink = {
+  chat_id: number;
+  workspace_id: string;
+  telegram_username: string | null;
+  telegram_first_name: string | null;
+  linked_at: string;
+};
+
+export type TelegramStartLinkResult = {
+  token: string;
+  deep_link: string | null;
+  bot_username: string | null;
+  expires_at: string;
+};
+
+export async function startTelegramLink(): Promise<TelegramStartLinkResult> {
+  const res = await fetch(`${API_URL}/integrations/telegram/start-link`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`telegram_start ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function listTelegramLinks(): Promise<TelegramLink[]> {
+  const res = await fetch(`${API_URL}/integrations/telegram/links`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`telegram_links ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { links: TelegramLink[] };
+  return json.links;
+}
+
+export async function unlinkTelegram(chatId: number): Promise<void> {
+  const res = await fetch(`${API_URL}/integrations/telegram/links/${chatId}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`telegram_unlink ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+}
+
 // ---- Smart alerts -------------------------------------------------------
 
 export type AlertLevel = 'critical' | 'high' | 'low';

@@ -12,6 +12,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@mycortex/db": "workspace:*",
     "@mycortex/shared-types": "workspace:*",
     "dotenv": "^17.4.2",
     "fastify": "^5.2.0",
