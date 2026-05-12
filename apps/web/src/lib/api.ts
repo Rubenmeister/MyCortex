@@ -230,9 +230,13 @@ export type TelegramStartLinkResult = {
 };
 
 export async function startTelegramLink(): Promise<TelegramStartLinkResult> {
+  // authHeaders() sets Content-Type: application/json, so Fastify rejects
+  // empty bodies with FST_ERR_CTP_EMPTY_JSON_BODY. Send {} to satisfy the
+  // parser even though the endpoint takes no params.
   const res = await fetch(`${API_URL}/integrations/telegram/start-link`, {
     method: 'POST',
     headers: await authHeaders(),
+    body: '{}',
   });
   if (!res.ok) {
     throw new Error(`telegram_start ${res.status}: ${(await res.text()).slice(0, 200)}`);
