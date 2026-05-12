@@ -21,6 +21,9 @@ const EnvSchema = z.object({
   GOOGLE_GENERATIVE_AI_API_KEY: optKey,
   TAVILY_API_KEY: optKey,
   COHERE_API_KEY: optKey,
+  RESEND_API_KEY: optKey,
+  /** From address for outbound mails. Defaults to a Resend sandbox sender. */
+  RESEND_FROM_EMAIL: optKey,
 
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
   // disable themselves if these aren't configured. Each provider has its

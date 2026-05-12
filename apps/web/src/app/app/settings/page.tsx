@@ -4,10 +4,13 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useWorkspace } from '../../../lib/workspace';
 import {
   changeMemberRole,
+  createInvitation,
   createWorkspace,
-  inviteMember,
+  listInvitations,
   listMembers,
   removeMember,
+  revokeInvitation,
+  type PendingInvitation,
   type WorkspaceMember,
   type WorkspaceRole,
 } from '../../../lib/api';
@@ -15,6 +18,7 @@ import {
 export default function SettingsPage() {
   const { workspaces, current, refresh, switchTo } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMember[] | null>(null);
+  const [invitations, setInvitations] = useState<PendingInvitation[] | null>(null);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -31,8 +35,15 @@ export default function SettingsPage() {
     setLoadingMembers(true);
     setErr(null);
     try {
-      const list = await listMembers(current.id);
-      setMembers(list);
+      const [m, inv] = await Promise.all([
+        listMembers(current.id),
+        // Only owners/admins can list invitations; ignore 403 silently.
+        current.role === 'owner' || current.role === 'admin'
+          ? listInvitations(current.id).catch(() => [])
+          : Promise.resolve([]),
+      ]);
+      setMembers(m);
+      setInvitations(inv);
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -75,23 +86,39 @@ export default function SettingsPage() {
     setErr(null);
     setInfo(null);
     try {
-      const r = await inviteMember(current.id, inviteEmail.trim(), inviteRole);
+      const r = await createInvitation(current.id, inviteEmail.trim(), inviteRole);
       setInviteEmail('');
-      setInfo(
-        r.alreadyMember
-          ? `${r.member.email} ya era miembro (rol: ${r.member.role})`
-          : `${r.member.email} agregado como ${r.member.role}`,
-      );
+      if (r.status === 'already_member') {
+        setInfo(`${r.email} ya era miembro (rol: ${r.role})`);
+      } else if (r.status === 'already_pending') {
+        setInfo(`${r.invitation.email} ya tiene una invitación pendiente.`);
+      } else {
+        // status === 'created'
+        if (r.email_sent) {
+          setInfo(`Invitación enviada a ${r.invitation.email}. El link expira en 7 días.`);
+        } else {
+          setInfo(
+            `Invitación creada (email no enviado — sin Resend configurado). Comparte el link: ${r.accept_url}`,
+          );
+        }
+      }
       await loadMembers();
     } catch (e) {
-      const msg = String(e);
-      if (msg.includes('user_not_found')) {
-        setErr('Ese email no tiene una cuenta. El usuario debe registrarse primero.');
-      } else {
-        setErr(msg);
-      }
+      setErr(String(e));
     } finally {
       setInviting(false);
+    }
+  };
+
+  const onRevoke = async (invitationId: string, email: string) => {
+    if (!current) return;
+    if (!confirm(`Revocar invitación a ${email}?`)) return;
+    try {
+      await revokeInvitation(current.id, invitationId);
+      await loadMembers();
+      setInfo('Invitación revocada');
+    } catch (e) {
+      setErr(String(e));
     }
   };
 
@@ -183,28 +210,73 @@ export default function SettingsPage() {
         )}
 
         {isAdmin && !current.is_personal && (
-          <form onSubmit={onInvite} className="invite-form">
-            <input
-              type="email"
-              placeholder="Invitar por email…"
-              value={inviteEmail}
-              onChange={(e) => setInviteEmail(e.target.value)}
-              required
-              disabled={inviting}
-            />
-            <select
-              value={inviteRole}
-              onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'viewer')}
-              disabled={inviting}
-            >
-              <option value="admin">admin</option>
-              <option value="member">member</option>
-              <option value="viewer">viewer</option>
-            </select>
-            <button type="submit" disabled={inviting || !inviteEmail.trim()}>
-              {inviting ? '…' : 'Invitar'}
-            </button>
-          </form>
+          <>
+            <form onSubmit={onInvite} className="invite-form">
+              <input
+                type="email"
+                placeholder="Invitar por email…"
+                value={inviteEmail}
+                onChange={(e) => setInviteEmail(e.target.value)}
+                required
+                disabled={inviting}
+              />
+              <select
+                value={inviteRole}
+                onChange={(e) => setInviteRole(e.target.value as 'admin' | 'member' | 'viewer')}
+                disabled={inviting}
+              >
+                <option value="admin">admin</option>
+                <option value="member">member</option>
+                <option value="viewer">viewer</option>
+              </select>
+              <button type="submit" disabled={inviting || !inviteEmail.trim()}>
+                {inviting ? '…' : 'Invitar'}
+              </button>
+            </form>
+
+            {invitations && invitations.filter((i) => !i.accepted_at).length > 0 && (
+              <div className="pending-block">
+                <div className="pending-title">
+                  Invitaciones pendientes ({invitations.filter((i) => !i.accepted_at).length})
+                </div>
+                <ul className="pending-list">
+                  {invitations
+                    .filter((i) => !i.accepted_at)
+                    .map((inv) => {
+                      const expired = new Date(inv.expires_at).getTime() < Date.now();
+                      return (
+                        <li key={inv.id}>
+                          <div className="p-email">{inv.email}</div>
+                          <div className="p-meta">
+                            {expired ? (
+                              <span className="p-expired">⚠ expirada</span>
+                            ) : inv.email_sent_at ? (
+                              <span className="p-sent">✉ enviada</span>
+                            ) : inv.email_error ? (
+                              <span className="p-error" title={inv.email_error}>
+                                ⚠ falló envío
+                              </span>
+                            ) : (
+                              <span className="p-pending">⋯ no enviada</span>
+                            )}
+                            {' · '}
+                            <span className="m-role">{inv.role}</span>
+                            {' · '}expira {new Date(inv.expires_at).toLocaleDateString()}
+                          </div>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            onClick={() => onRevoke(inv.id, inv.email)}
+                          >
+                            Revocar
+                          </button>
+                        </li>
+                      );
+                    })}
+                </ul>
+              </div>
+            )}
+          </>
         )}
 
         {current.is_personal && (
@@ -403,6 +475,50 @@ export default function SettingsPage() {
           font-size: 13px;
           margin: 14px 0 0;
         }
+        .pending-block {
+          margin-top: 18px;
+          padding-top: 14px;
+          border-top: 1px dashed #2a2a3a;
+        }
+        .pending-title {
+          color: #888;
+          font-size: 11px;
+          text-transform: uppercase;
+          letter-spacing: 0.6px;
+          margin-bottom: 10px;
+          font-weight: 700;
+        }
+        .pending-list {
+          list-style: none;
+          padding: 0;
+          margin: 0;
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+        }
+        .pending-list li {
+          display: grid;
+          grid-template-columns: 1fr auto;
+          align-items: center;
+          gap: 6px 10px;
+          padding: 10px 12px;
+          background: #14141c;
+          border: 1px dashed #232330;
+          border-radius: 8px;
+        }
+        .p-email {
+          color: #ddd;
+          font-size: 13px;
+        }
+        .p-meta {
+          color: #888;
+          font-size: 11px;
+          grid-column: 1;
+        }
+        .p-sent { color: #9c9; }
+        .p-pending { color: #cc9; }
+        .p-error { color: #ff9b9b; }
+        .p-expired { color: #ff9b9b; }
         .empty {
           color: #888;
           text-align: center;

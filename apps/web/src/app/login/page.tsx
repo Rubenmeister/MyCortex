@@ -1,12 +1,19 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '../../lib/auth';
 
 export default function LoginPage() {
   const { signIn } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Allow callers (e.g. /invite/:token) to send the user back to a
+  // specific page after login. Only accept relative paths to avoid open
+  // redirect vulnerabilities.
+  const next = searchParams.get('next');
+  const safeNext = next && next.startsWith('/') ? next : '/app';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -19,7 +26,7 @@ export default function LoginPage() {
     const r = await signIn(email.trim(), password);
     setBusy(false);
     if (r.error) setErr(r.error);
-    else router.replace('/app');
+    else router.replace(safeNext);
   };
 
   return (

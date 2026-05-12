@@ -308,3 +308,60 @@ export async function removeMember(workspaceId: string, userId: string): Promise
   });
   if (!res.ok) throw new Error(`remove ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
+
+// ---- Workspace invitations (email-based, supports non-users) ------------
+
+export type PendingInvitation = {
+  id: string;
+  email: string;
+  role: 'admin' | 'member' | 'viewer';
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  email_sent_at: string | null;
+  email_error: string | null;
+};
+
+export type CreateInvitationResult =
+  | {
+      status: 'created';
+      invitation: PendingInvitation;
+      email_sent: boolean;
+      accept_url: string;
+    }
+  | { status: 'already_pending'; invitation: PendingInvitation }
+  | { status: 'already_member'; email: string; role: WorkspaceRole };
+
+export async function listInvitations(workspaceId: string): Promise<PendingInvitation[]> {
+  const res = await fetch(`${API_URL}/workspaces/${workspaceId}/invitations`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`invitations ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { invitations: PendingInvitation[] };
+  return json.invitations;
+}
+
+export async function createInvitation(
+  workspaceId: string,
+  email: string,
+  role: 'admin' | 'member' | 'viewer' = 'member',
+): Promise<CreateInvitationResult> {
+  const res = await fetch(`${API_URL}/workspaces/${workspaceId}/invitations`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ email, role }),
+  });
+  if (!res.ok) throw new Error(`invite ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+export async function revokeInvitation(
+  workspaceId: string,
+  invitationId: string,
+): Promise<void> {
+  const res = await fetch(
+    `${API_URL}/workspaces/${workspaceId}/invitations/${invitationId}`,
+    { method: 'DELETE', headers: await authHeaders() },
+  );
+  if (!res.ok) throw new Error(`revoke ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}

@@ -1,8 +1,11 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import type { WorkspaceRole } from '@mycortex/db/types';
 import { requireAuth } from '../../lib/auth.js';
 import { getDb } from '../../lib/db.js';
+import { getEnv } from '../../lib/env.js';
+import { renderInvitationEmail, sendEmail } from '../../lib/email.js';
 
 /**
  * Workspaces module: list/create workspaces, manage members.
@@ -257,6 +260,206 @@ export const workspacesModule: FastifyPluginAsync = async (server) => {
       .eq('user_id', params.data.userId);
     if (error) return reply.code(500).send({ error: 'delete_failed', detail: error.message });
 
+    return reply.code(200).send({ ok: true });
+  });
+
+  // ---------------------------------------------------------------- INVITATIONS
+  /**
+   * POST /workspaces/:id/invitations — invite by email, even if the user
+   * doesn't have an account yet. Creates a tokenized invitation row + sends
+   * an email via Resend (gracefully no-ops if Resend not configured).
+   *
+   * Caller must be owner or admin. Idempotent: re-inviting the same email
+   * to the same workspace returns the existing pending invitation.
+   */
+  const CreateInvitationBody = z.object({
+    email: z.string().email().transform((s) => s.toLowerCase().trim()),
+    role: z.enum(['admin', 'member', 'viewer']).default('member'),
+  });
+
+  server.post('/:id/invitations', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_workspace_id' });
+    const body = CreateInvitationBody.safeParse(req.body);
+    if (!body.success) {
+      return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
+    }
+
+    const callerMembership = await assertMember(params.data.id, auth.userId);
+    if (!callerMembership) return reply.code(403).send({ error: 'not_a_member' });
+    if (callerMembership.role !== 'owner' && callerMembership.role !== 'admin') {
+      return reply.code(403).send({ error: 'insufficient_role' });
+    }
+
+    const db = getDb();
+    const env = getEnv();
+
+    // Already a member? Surface that instead of creating a phantom invite.
+    const { data: existingMember } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
+    const existingUser = existingMember.users.find(
+      (u) => u.email?.toLowerCase() === body.data.email,
+    );
+    if (existingUser) {
+      const { data: m } = await db
+        .from('workspace_members')
+        .select('role')
+        .eq('workspace_id', params.data.id)
+        .eq('user_id', existingUser.id)
+        .maybeSingle();
+      if (m) {
+        return reply.code(200).send({
+          status: 'already_member',
+          email: body.data.email,
+          role: m.role,
+        });
+      }
+    }
+
+    // Existing pending invitation? Return as-is (don't double-send).
+    const { data: existingInvite } = await db
+      .from('workspace_invitations')
+      .select('*')
+      .eq('workspace_id', params.data.id)
+      .eq('email', body.data.email)
+      .is('accepted_at', null)
+      .maybeSingle();
+    if (existingInvite) {
+      return reply.code(200).send({
+        status: 'already_pending',
+        invitation: existingInvite,
+      });
+    }
+
+    // Look up workspace name (for the email) and inviter profile.
+    const { data: ws } = await db
+      .from('workspaces')
+      .select('name')
+      .eq('id', params.data.id)
+      .maybeSingle();
+    if (!ws) return reply.code(404).send({ error: 'workspace_not_found' });
+
+    const { data: inviter } = await db.auth.admin.getUserById(auth.userId);
+    const inviterEmail = inviter?.user?.email ?? 'someone';
+    const inviterName =
+      (inviter?.user?.user_metadata?.full_name as string | undefined) ?? null;
+
+    // Generate token + insert invitation.
+    const token = randomBytes(32).toString('base64url');
+    const { data: insertedRows, error: insErr } = await db
+      .from('workspace_invitations')
+      .insert({
+        workspace_id: params.data.id,
+        email: body.data.email,
+        role: body.data.role,
+        token,
+        invited_by: auth.userId,
+      })
+      .select('*')
+      .limit(1);
+    if (insErr || !insertedRows || insertedRows.length === 0) {
+      return reply
+        .code(500)
+        .send({ error: 'insert_failed', detail: insErr?.message ?? 'no_rows' });
+    }
+    const inserted = insertedRows[0]!;
+
+    // Send the email via Resend. Failure here is logged but doesn't fail
+    // the request — the user can always re-send (we'll add that endpoint).
+    const acceptUrl = `${env.WEB_BASE_URL}/invite/${token}`;
+    const tpl = renderInvitationEmail({
+      workspaceName: ws.name,
+      inviterEmail,
+      inviterName,
+      role: body.data.role,
+      acceptUrl,
+    });
+    const send = await sendEmail({
+      to: body.data.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      tags: [
+        { name: 'kind', value: 'workspace_invitation' },
+        { name: 'workspace_id', value: params.data.id },
+      ],
+    });
+    if (send.sent) {
+      await db
+        .from('workspace_invitations')
+        .update({
+          email_sent_at: new Date().toISOString(),
+          email_provider_id: send.id,
+          email_error: null,
+        })
+        .eq('id', inserted.id);
+    } else {
+      await db
+        .from('workspace_invitations')
+        .update({ email_error: send.reason.slice(0, 200) })
+        .eq('id', inserted.id);
+      req.log.warn(
+        { reason: send.reason, email: body.data.email },
+        'invitation_email_not_sent',
+      );
+    }
+
+    return reply.code(201).send({
+      status: 'created',
+      invitation: { ...inserted, email_sent_at: send.sent ? new Date().toISOString() : null },
+      email_sent: send.sent,
+      accept_url: acceptUrl,
+    });
+  });
+
+  /**
+   * GET /workspaces/:id/invitations — list pending invitations for a
+   * workspace. Caller must be owner or admin.
+   */
+  server.get('/:id/invitations', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = IdParam.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_workspace_id' });
+    const callerMembership = await assertMember(params.data.id, auth.userId);
+    if (!callerMembership) return reply.code(403).send({ error: 'not_a_member' });
+    if (callerMembership.role !== 'owner' && callerMembership.role !== 'admin') {
+      return reply.code(403).send({ error: 'insufficient_role' });
+    }
+
+    const { data, error } = await getDb()
+      .from('workspace_invitations')
+      .select('id, email, role, created_at, expires_at, accepted_at, email_sent_at, email_error')
+      .eq('workspace_id', params.data.id)
+      .order('created_at', { ascending: false });
+    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+    return reply.code(200).send({ invitations: data ?? [] });
+  });
+
+  /**
+   * DELETE /workspaces/:id/invitations/:invitationId — revoke a pending
+   * invitation. Caller must be owner or admin.
+   */
+  server.delete('/:id/invitations/:invitationId', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = z
+      .object({ id: z.string().uuid(), invitationId: z.string().uuid() })
+      .safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_params' });
+    const callerMembership = await assertMember(params.data.id, auth.userId);
+    if (!callerMembership) return reply.code(403).send({ error: 'not_a_member' });
+    if (callerMembership.role !== 'owner' && callerMembership.role !== 'admin') {
+      return reply.code(403).send({ error: 'insufficient_role' });
+    }
+
+    const { error } = await getDb()
+      .from('workspace_invitations')
+      .delete()
+      .eq('id', params.data.invitationId)
+      .eq('workspace_id', params.data.id);
+    if (error) return reply.code(500).send({ error: 'delete_failed', detail: error.message });
     return reply.code(200).send({ ok: true });
   });
 };

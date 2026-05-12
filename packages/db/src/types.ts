@@ -250,6 +250,46 @@ export type SyncSourceUpdate = Partial<
   Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
 >;
 
+// ---- Workspace invitations --------------------------------------------
+
+export type WorkspaceInvitationRole = 'admin' | 'member' | 'viewer';
+
+export type WorkspaceInvitationRow = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceInvitationRole;
+  token: string;
+  invited_by: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  accepted_by: string | null;
+  email_sent_at: string | null;
+  email_provider_id: string | null;
+  email_error: string | null;
+};
+
+export type WorkspaceInvitationInsert = {
+  id?: string;
+  workspace_id: string;
+  email: string;
+  role: WorkspaceInvitationRole;
+  token: string;
+  invited_by: string;
+  expires_at?: string;
+  email_sent_at?: string | null;
+  email_provider_id?: string | null;
+  email_error?: string | null;
+};
+
+export type WorkspaceInvitationUpdate = Partial<
+  Pick<
+    WorkspaceInvitationRow,
+    'accepted_at' | 'accepted_by' | 'email_sent_at' | 'email_provider_id' | 'email_error'
+  >
+>;
+
 // ---- Daily digests -----------------------------------------------------
 
 /**
@@ -352,6 +392,12 @@ export type Database = {
         Row: DailyDigestRow;
         Insert: DailyDigestInsert;
         Update: Partial<DailyDigestInsert>;
+        Relationships: [];
+      };
+      workspace_invitations: {
+        Row: WorkspaceInvitationRow;
+        Insert: WorkspaceInvitationInsert;
+        Update: WorkspaceInvitationUpdate;
         Relationships: [];
       };
     };
