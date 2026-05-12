@@ -1,0 +1,66 @@
+# Cloud Run service deployment for the Telegram bot.
+# Service (not Job) because the bot listens on HTTP for Telegram webhooks.
+#
+# Trigger from local:
+#   gcloud builds submit . \
+#     --config=apps/bot-telegram/cloudbuild.yaml \
+#     --project=$PROJECT_ID
+
+substitutions:
+  _REGION: us-east1
+  _SERVICE: mycortex-bot
+  _REPO: mycortex
+  _SUPABASE_URL: 'https://ifsdhwihdjrogebsutem.supabase.co'
+  _API_URL: 'https://mycortex-api-v5e3u7loza-ue.a.run.app'
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --file=apps/bot-telegram/Dockerfile
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --memory=512Mi
+      - --cpu=1
+      # min=1 so cold-start latency doesn't drop the first Telegram
+      # webhook update after idle (Telegram retries but with delays).
+      - --min-instances=1
+      - --max-instances=3
+      - --concurrency=80
+      - --timeout=60s
+      - --service-account=mycortex-api-sa@$PROJECT_ID.iam.gserviceaccount.com
+      # BOT_PUBLIC_URL: predicted Cloud Run URL pattern for this project.
+      # If wrong after first deploy, override via:
+      #   gcloud run services update mycortex-bot --update-env-vars=BOT_PUBLIC_URL=<actual-url>
+      - --set-env-vars=^|^NODE_ENV=production|SUPABASE_URL=${_SUPABASE_URL}|API_URL=${_API_URL}|BOT_PUBLIC_URL=https://mycortex-bot-v5e3u7loza-ue.a.run.app
+      - --set-secrets=TELEGRAM_BOT_TOKEN=mycortex-telegram-bot:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,OPENAI_API_KEY=mycortex-openai:latest,BOT_WEBHOOK_SECRET=mycortex-bot-webhook-secret:latest
+
+images:
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

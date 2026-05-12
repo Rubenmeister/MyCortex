@@ -35,7 +35,7 @@ substitutions:
   _CALENDAR_OAUTH_REDIRECT_URI: 'https://mycortex-api-v5e3u7loza-ue.a.run.app/integrations/calendar/callback'
   # Username (without @) of the bot users see for the t.me deep link.
   # Override at deploy time when the bot identity changes.
-  _TELEGRAM_BOT_USERNAME: 'MyCortexBot'
+  _TELEGRAM_BOT_USERNAME: 'mycortex_brain_bot'
 
 steps:
   # 1. Build the image

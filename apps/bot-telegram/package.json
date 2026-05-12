@@ -6,7 +6,7 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsup",
     "start": "node dist/index.js",
     "lint": "eslint .",
     "type-check": "tsc --noEmit"
@@ -23,6 +23,7 @@
     "@mycortex/config-eslint": "workspace:*",
     "@mycortex/config-tsconfig": "workspace:*",
     "@types/node": "^22.10.0",
+    "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

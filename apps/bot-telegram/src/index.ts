@@ -3,6 +3,7 @@
 import { config as loadDotenv } from 'dotenv';
 loadDotenv({ override: true });
 
+import Fastify from 'fastify';
 import { Telegraf } from 'telegraf';
 import { message } from 'telegraf/filters';
 import { createDb } from '@mycortex/db';
@@ -251,18 +252,69 @@ bot.catch((err, ctx) => {
   ctx.reply('Error procesando. Revisa los logs.').catch(() => {});
 });
 
-await bot.launch(() => {
-  console.log(
-    JSON.stringify({
-      level: 'info',
-      msg: 'bot_started',
-      multiUser: true,
-      defaultUserFallback: cfg.TELEGRAM_DEFAULT_USER_ID
-        ? `${cfg.TELEGRAM_DEFAULT_USER_ID.slice(0, 8)}…`
-        : 'none',
-    }),
-  );
-});
+function log(msg: string, extra: Record<string, unknown> = {}): void {
+  console.log(JSON.stringify({ level: 'info', msg, ts: new Date().toISOString(), ...extra }));
+}
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+/**
+ * Launch the bot in one of two modes:
+ *
+ * 1. WEBHOOK MODE (production, Cloud Run): Telegram POSTs each update to
+ *    `${BOT_PUBLIC_URL}/webhook`. We start a tiny Fastify server that
+ *    listens on Cloud Run's PORT, validates the secret header, and feeds
+ *    the update into Telegraf. Cloud Run can scale to zero between
+ *    bursts; warm-up latency is masked by Telegram retries.
+ *
+ * 2. LONG-POLLING MODE (local dev): no webhook URL → bot.launch() opens
+ *    a persistent connection to Telegram and polls for updates. Simpler
+ *    for dev but needs a process running 24/7 (not Cloud-Run-friendly).
+ */
+if (cfg.BOT_PUBLIC_URL && cfg.BOT_WEBHOOK_SECRET) {
+  const fastify = Fastify({ logger: false, bodyLimit: 5 * 1024 * 1024 });
+
+  // Cloud Run healthcheck — must respond <10s on cold start.
+  fastify.get('/health', async () => ({ status: 'ok', uptime: process.uptime() }));
+
+  // Telegram POSTs here with each incoming update.
+  fastify.post('/webhook', async (req, reply) => {
+    const secret = req.headers['x-telegram-bot-api-secret-token'];
+    if (secret !== cfg.BOT_WEBHOOK_SECRET) {
+      log('webhook_invalid_secret');
+      return reply.code(401).send({ error: 'invalid_secret' });
+    }
+    try {
+      // Telegraf's handleUpdate takes the raw update object.
+      await bot.handleUpdate(req.body as Parameters<typeof bot.handleUpdate>[0]);
+      return reply.code(200).send({ ok: true });
+    } catch (err) {
+      log('webhook_handler_error', { err: String(err).slice(0, 200) });
+      // 200 anyway — Telegram retries on non-2xx, and a bad update is
+      // better dropped than re-delivered forever.
+      return reply.code(200).send({ ok: true });
+    }
+  });
+
+  await fastify.listen({ port: cfg.PORT, host: '0.0.0.0' });
+  log('bot_http_listening', { port: cfg.PORT });
+
+  // Register the webhook with Telegram. Idempotent — if the URL/secret
+  // hasn't changed, Telegram just ACKs. Done after server is listening
+  // so we can't miss the first update.
+  const webhookUrl = `${cfg.BOT_PUBLIC_URL.replace(/\/$/, '')}/webhook`;
+  await bot.telegram.setWebhook(webhookUrl, {
+    secret_token: cfg.BOT_WEBHOOK_SECRET,
+    drop_pending_updates: false,
+  });
+  log('webhook_registered', { url: webhookUrl });
+} else {
+  // Long-polling fallback (local dev).
+  await bot.launch();
+  log('bot_started_longpolling', {
+    multiUser: true,
+    defaultUserFallback: cfg.TELEGRAM_DEFAULT_USER_ID
+      ? `${cfg.TELEGRAM_DEFAULT_USER_ID.slice(0, 8)}…`
+      : 'none',
+  });
+  process.once('SIGINT', () => bot.stop('SIGINT'));
+  process.once('SIGTERM', () => bot.stop('SIGTERM'));
+}

@@ -16,6 +16,16 @@ const EnvSchema = z.object({
   SUPABASE_URL: z.string().url(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   OPENAI_API_KEY: optKey,
+
+  /** Public HTTPS URL where Cloud Run hosts the bot. Required for webhook
+   *  mode (production). When unset, falls back to long-polling (good for
+   *  local dev). */
+  BOT_PUBLIC_URL: optKey,
+  /** Random shared secret Telegram includes in X-Telegram-Bot-Api-Secret-Token
+   *  header on each webhook POST. Validated server-side to reject spam. */
+  BOT_WEBHOOK_SECRET: optKey,
+  /** Port the HTTP server listens on. Cloud Run injects PORT=8080 by default. */
+  PORT: z.coerce.number().int().positive().default(8080),
 });
 
 export type Config = z.infer<typeof EnvSchema>;
