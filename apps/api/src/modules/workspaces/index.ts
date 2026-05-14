@@ -1,11 +1,39 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import type { Db } from '@mycortex/db';
 import type { WorkspaceRole } from '@mycortex/db/types';
 import { requireAuth } from '../../lib/auth.js';
 import { getDb } from '../../lib/db.js';
 import { getEnv } from '../../lib/env.js';
 import { renderInvitationEmail, sendEmail } from '../../lib/email.js';
+
+/**
+ * Look up an auth.users row by email. Supabase admin.listUsers paginates
+ * at 1000 per page — beyond that, the existing single-page lookup
+ * silently fails to find users (returns "not found"). This pages
+ * through all users until a match is found or the pages are exhausted.
+ *
+ * For multi-thousand-user deployments we should swap this to a direct
+ * SQL query against auth.users with an index on email; for now linear
+ * pagination is fine.
+ */
+async function findUserByEmail(
+  db: Db,
+  email: string,
+  maxPages = 50,
+): Promise<{ id: string; email: string | null } | null> {
+  const target = email.toLowerCase().trim();
+  for (let page = 1; page <= maxPages; page++) {
+    const { data, error } = await db.auth.admin.listUsers({ page, perPage: 1000 });
+    if (error) throw new Error(`listUsers: ${error.message}`);
+    if (!data || data.users.length === 0) return null;
+    const found = data.users.find((u) => u.email?.toLowerCase() === target);
+    if (found) return { id: found.id, email: found.email ?? null };
+    if (data.users.length < 1000) return null; // last page
+  }
+  return null;
+}
 
 /**
  * Workspaces module: list/create workspaces, manage members.
@@ -158,14 +186,15 @@ export const workspacesModule: FastifyPluginAsync = async (server) => {
       return reply.code(403).send({ error: 'insufficient_role' });
     }
 
-    // Resolve target user by email (admin API).
+    // Resolve target user by email (admin API). Pages through all users
+    // so > 1000-user deployments don't silently fail to find someone.
     const db = getDb();
-    const { data: usersList, error: lookupErr } = await db.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
-    if (lookupErr) return reply.code(500).send({ error: 'lookup_failed', detail: lookupErr.message });
-    const target = usersList.users.find((u) => u.email?.toLowerCase() === body.data.email.toLowerCase());
+    let target: { id: string; email: string | null } | null;
+    try {
+      target = await findUserByEmail(db, body.data.email);
+    } catch (err) {
+      return reply.code(500).send({ error: 'lookup_failed', detail: String(err).slice(0, 120) });
+    }
     if (!target) return reply.code(404).send({ error: 'user_not_found', email: body.data.email });
 
     // Already a member? Idempotent — return current row.
@@ -297,10 +326,13 @@ export const workspacesModule: FastifyPluginAsync = async (server) => {
     const env = getEnv();
 
     // Already a member? Surface that instead of creating a phantom invite.
-    const { data: existingMember } = await db.auth.admin.listUsers({ page: 1, perPage: 1000 });
-    const existingUser = existingMember.users.find(
-      (u) => u.email?.toLowerCase() === body.data.email,
-    );
+    // Pages through users so we don't false-negative beyond 1000 accounts.
+    let existingUser: { id: string; email: string | null } | null;
+    try {
+      existingUser = await findUserByEmail(db, body.data.email);
+    } catch (err) {
+      return reply.code(500).send({ error: 'lookup_failed', detail: String(err).slice(0, 120) });
+    }
     if (existingUser) {
       const { data: m } = await db
         .from('workspace_members')

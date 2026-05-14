@@ -14,7 +14,10 @@ import { getDb } from '../../lib/db.js';
  * (set at insert time). Acceptance is idempotent — if the row is
  * already accepted, returns 200 with `already_accepted: true`.
  */
-const TokenParam = z.object({ token: z.string().min(20).max(80) });
+// Tokens are 32 random bytes base64url-encoded = exactly 43 chars (the
+// 256-bit secret pads to ceil(32*4/3) = 43 without padding). Reject
+// shorter inputs so a brute-forcer can't guess shorter prefixes.
+const TokenParam = z.object({ token: z.string().min(43).max(80) });
 
 export const invitationsModule: FastifyPluginAsync = async (server) => {
   // ---- GET /invitations/:token ------------------------------------------

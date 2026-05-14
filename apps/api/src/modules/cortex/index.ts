@@ -190,12 +190,16 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
         break;
     }
 
+    // Defense in depth: even though RLS restricts UPDATE to user_id =
+    // auth.uid(), filter explicitly so a misconfigured policy can't
+    // accidentally let one workspace member mutate another's alert.
     const { error } = await auth.db
       .from('smart_alerts')
       .update(update)
       .eq('id', params.data.id)
-      .eq('workspace_id', auth.workspaceId);
-    if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
+      .eq('workspace_id', auth.workspaceId)
+      .eq('user_id', auth.userId);
+    if (error) return reply.code(500).send({ error: 'db_error' });
     return reply.code(200).send({ ok: true });
   });
 

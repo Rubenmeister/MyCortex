@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { getEnv } from '../../lib/env.js';
 
@@ -19,8 +19,25 @@ export type OAuthState = {
 };
 
 function hmacSecret(): string {
-  return getEnv().SUPABASE_SERVICE_ROLE_KEY;
+  const env = getEnv();
+  // Prefer the dedicated OAUTH_STATE_SECRET if provided. If not, fall
+  // back to the service role key (legacy behavior) — production should
+  // rotate to a separate value so a state-token leak doesn't expose the
+  // master DB key.
+  return env.OAUTH_STATE_SECRET ?? env.SUPABASE_SERVICE_ROLE_KEY;
 }
+
+/**
+ * Defensive shape validation of the decoded state body. The HMAC proves
+ * the server signed it, but we still validate the structure so a buggy
+ * issuer can't ever bind an integration to a non-UUID id.
+ */
+const OAuthStateSchema = z.object({
+  workspaceId: z.string().uuid(),
+  userId: z.string().uuid(),
+  nonce: z.string().min(1),
+  iat: z.number(),
+});
 
 export function signState(payload: Omit<OAuthState, 'iat'>): string {
   const full: OAuthState = { ...payload, iat: Date.now() };
@@ -33,8 +50,17 @@ export function verifyState(token: string): OAuthState {
   const [body, sig] = token.split('.');
   if (!body || !sig) throw new Error('malformed_state');
   const expected = createHmac('sha256', hmacSecret()).update(body).digest('base64url');
-  if (expected !== sig) throw new Error('invalid_signature');
-  const parsed = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as OAuthState;
+  // Constant-time comparison to prevent signature-leak timing attacks.
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  if (sigBuf.length !== expectedBuf.length || !timingSafeEqual(sigBuf, expectedBuf)) {
+    throw new Error('invalid_signature');
+  }
+  // Parse + structurally validate. Even with a valid HMAC, we reject
+  // anything that doesn't match the expected shape so a future buggy
+  // issuer can't ever bind an integration to a non-UUID id.
+  const raw = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as unknown;
+  const parsed = OAuthStateSchema.parse(raw);
   if (Date.now() - parsed.iat > STATE_TTL_MS) throw new Error('state_expired');
   return parsed;
 }

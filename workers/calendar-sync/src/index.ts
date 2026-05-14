@@ -133,7 +133,15 @@ async function syncEvent(
     metadata: {},
   };
 
-  const { error } = await db.from('nodes').insert(insert);
+  // Use upsert so two concurrent runs racing on the same event don't
+  // collide on the (workspace_id, external_source, external_id) unique
+  // index. The second one ignored; first one wins.
+  const { error } = await db
+    .from('nodes')
+    .upsert(insert, {
+      onConflict: 'workspace_id,external_source,external_id',
+      ignoreDuplicates: false, // overwrite with latest data when re-syncing
+    });
   if (error) return { kind: 'failed', error: `db:${error.message}` };
   return { kind: 'indexed' };
 }

@@ -31,9 +31,9 @@ Para CADA item recibido, decidí:
    - NO → omitilo del output (no devuelvas nada para items irrelevantes)
 
 2. Si es accionable, asigná **level**:
-   - **critical**: Hay que actuar HOY o se pierde algo (deadline en <24h, conductor sin asignar para viaje mañana, factura pendiente, urgencia médica/legal).
-   - **high**: Hay que actuar esta semana (próxima reunión que requiere prep, mail importante esperando respuesta, documentación pendiente con deadline cercano).
-   - **low**: FYI relevante pero sin urgencia (newsletter con dato útil, evento informativo, cambio menor).
+   - **critical**: Hay que actuar HOY o se pierde algo (deadline en <24h, conductor sin asignar para viaje mañana, urgencia médica/legal, suspensión de servicio inminente).
+   - **high**: Hay que actuar esta semana (próxima reunión que requiere prep, mail importante esperando respuesta, documentación pendiente con deadline cercano, contrato pendiente de firma).
+   - **low**: FYI relevante pero sin urgencia (cambio de política, evento informativo, dato útil que vale la pena recordar).
 
 3. Generá **title** (1 línea, ≤70 chars): el qué.
    - Bien: "Datafast: contrato listo para firmar"
@@ -49,9 +49,24 @@ Para CADA item recibido, decidí:
 
 6. **context** (≤120 chars): snippet textual del item para contexto.
 
-REGLAS:
+REGLAS DE OMISIÓN (estos NUNCA generan alerta, devolvelos vacíos):
+- **OTPs / códigos de seguridad de un solo uso**: cualquier mail con código numérico de 4-8 dígitos que expira en minutos (códigos de login, 2FA, verificación de SMS bancarios, "clave de seguridad temporal", "código de verificación"). Para cuando el usuario los vea ya expiraron. OMITIR SIEMPRE, sin importar el banco/servicio.
+- **Newsletters, marketing, promociones**: ofertas, descuentos, "no te pierdas", catálogos, blog posts auto-enviados.
+- **Notificaciones de redes sociales**: likes, comments, menciones, "alguien comentó tu post".
+- **Confirmaciones de transacciones ya completadas**: "tu pago fue exitoso", "recibimos tu transferencia". Solo informativos.
+- **Status normales de sistemas**: "tu app funciona normal", reportes de uptime, "todo OK".
+- **Recibos / facturas ya pagadas / cierres de cuenta sin acción pendiente**.
+
+REGLAS DE INCLUSIÓN (estos SÍ son alerta accionable):
+- Documentación pendiente con deadline (firma de contrato, completar trámite, subir archivo).
+- Mensajes de personas reales esperando respuesta concreta.
+- Cuentas bloqueadas, accesos comprometidos, alertas de seguridad QUE REQUIEREN ACCIÓN (cambiar contraseña, contactar soporte) — NO los OTPs.
+- Reuniones próximas que requieren preparación.
+- Tareas asignadas en plataformas (Datafast, Datil, GitHub PRs, Jira, etc.).
+- Operaciones logísticas inminentes sin asignar (viajes, entregas).
+
+REGLAS GENERALES:
 - Sé conservador con "critical" — solo cosas REALMENTE inmediatas (≤24h).
-- Newsletters, marketing, notificaciones automáticas, social → casi siempre se omiten.
 - Si el item es ambiguo (no está claro si demanda acción), preferí OMITIRLO.
 - Match el idioma del contenido (probablemente español).
 - Salida: array JSON de objetos {nodeId, level, title, action, deadline, context}. SOLO los items accionables. Items omitidos = no aparecen en el array.`;

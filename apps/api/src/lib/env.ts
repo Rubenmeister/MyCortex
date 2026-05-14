@@ -30,6 +30,13 @@ const EnvSchema = z.object({
    *  the token to copy/paste manually. */
   TELEGRAM_BOT_USERNAME: optKey,
 
+  /** Dedicated HMAC secret for signing OAuth state tokens (Drive, Gmail,
+   *  Calendar). Falls back to SUPABASE_SERVICE_ROLE_KEY for backwards
+   *  compat with deployments that haven't rotated yet, but production
+   *  SHOULD set this to a different random value so a state-token leak
+   *  doesn't expose the master DB key. */
+  OAUTH_STATE_SECRET: optKey,
+
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
   // disable themselves if these aren't configured. Each provider has its
   // own redirect URI registered in Google Cloud Console.
