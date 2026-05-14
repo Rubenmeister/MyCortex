@@ -193,11 +193,21 @@ export default function DigestPage() {
         </section>
       )}
 
-      {history.length > 1 && (
+      {history.length > 0 && (
         <section className="history">
           <h3>Briefings anteriores</h3>
           <ul>
-            {history.slice(1).map((d) => (
+            {/* Filter out the digests already rendered above (today's daily + */}
+            {/* latest weekly) instead of blindly dropping the first row. The   */}
+            {/* old slice(1) hid the entire history when 'today' was null but   */}
+            {/* a weekly existed.                                               */}
+            {history
+              .filter((d) => {
+                if (today && d.id === today.id) return false;
+                if (weekly && d.id === weekly.id) return false;
+                return true;
+              })
+              .map((d) => (
               <li key={d.id}>
                 <div className="hist-date">
                   {d.kind === 'weekly' && (

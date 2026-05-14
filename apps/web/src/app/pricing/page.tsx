@@ -80,8 +80,11 @@ export default function PricingPage() {
             <li>Agentes proactivos custom</li>
             <li>Histórico ilimitado de briefings</li>
           </ul>
-          <Link href="/login?upgrade=pro" className="btn-tier primary">
-            Empezar Pro
+          {/* Billing live deshabilitado hasta procesar Lemon Squeezy / Stripe-EC.
+              Mientras tanto el CTA invita a crear cuenta gratis + ofrecemos
+              upgrade desde la app cuando esté ready. */}
+          <Link href="/login" className="btn-tier primary">
+            Empezar gratis · Pro pronto
           </Link>
         </div>
 
@@ -100,9 +103,9 @@ export default function PricingPage() {
             <li>Single Sign-On (SAML/OIDC)</li>
             <li>Soporte prioritario</li>
           </ul>
-          <Link href="/login?upgrade=team" className="btn-tier ghost">
+          <a href="mailto:rubentorcob@gmail.com?subject=MyCortex%20Team%20-%20Contacto" className="btn-tier ghost">
             Hablar con ventas
-          </Link>
+          </a>
         </div>
       </section>
 

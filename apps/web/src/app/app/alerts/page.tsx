@@ -69,8 +69,24 @@ export default function AlertsPage() {
     if (current) void load();
   }, [current, load]);
 
+  // Mark all open alerts as `read` (just clearing the badge — distinct
+  // from "acted on" or "dismissed"). Best-effort: errors are silently
+  // ignored to avoid breaking the page just because the badge can't
+  // clear. The nav polls unread-count every 60s and will reflect it.
+  useEffect(() => {
+    if (!current || alerts.length === 0) return;
+    const unread = alerts.filter(
+      (a) => !a.read_at && !a.dismissed_at && !a.acted_on_at,
+    );
+    if (unread.length === 0) return;
+    Promise.allSettled(unread.map((a) => actOnAlert(a.id, 'read'))).catch(
+      () => undefined,
+    );
+  }, [current, alerts]);
+
   const act = async (id: string, action: 'read' | 'dismiss' | 'acted' | 'reopen') => {
     setBusy(id);
+    setError(null);
     try {
       await actOnAlert(id, action);
       await load();

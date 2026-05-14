@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useAuth } from '../../../lib/auth';
 import { useWorkspace } from '../../../lib/workspace';
 import {
   changeMemberRole,
@@ -16,6 +17,8 @@ import {
 } from '../../../lib/api';
 
 export default function SettingsPage() {
+  const { session } = useAuth();
+  const currentUserId = session?.user.id ?? null;
   const { workspaces, current, refresh, switchTo } = useWorkspace();
   const [members, setMembers] = useState<WorkspaceMember[] | null>(null);
   const [invitations, setInvitations] = useState<PendingInvitation[] | null>(null);
@@ -113,6 +116,8 @@ export default function SettingsPage() {
   const onRevoke = async (invitationId: string, email: string) => {
     if (!current) return;
     if (!confirm(`Revocar invitación a ${email}?`)) return;
+    setErr(null);
+    setInfo(null);
     try {
       await revokeInvitation(current.id, invitationId);
       await loadMembers();
@@ -124,6 +129,8 @@ export default function SettingsPage() {
 
   const onChangeRole = async (userId: string, role: WorkspaceRole) => {
     if (!current) return;
+    setErr(null);
+    setInfo(null);
     try {
       await changeMemberRole(current.id, userId, role);
       await loadMembers();
@@ -136,6 +143,8 @@ export default function SettingsPage() {
   const onRemove = async (userId: string, email: string | null) => {
     if (!current) return;
     if (!confirm(`Quitar a ${email ?? userId.slice(0, 8)} del workspace?`)) return;
+    setErr(null);
+    setInfo(null);
     try {
       await removeMember(current.id, userId);
       await loadMembers();
@@ -199,11 +208,15 @@ export default function SettingsPage() {
                 ) : (
                   <span className="m-role">{m.role}</span>
                 )}
-                {!current.is_personal && m.role !== 'owner' && (isOwner || m.user_id === current.owner_id) && (
-                  <button type="button" className="btn-ghost" onClick={() => onRemove(m.user_id, m.email)}>
-                    Quitar
-                  </button>
-                )}
+                {!current.is_personal &&
+                  m.role !== 'owner' &&
+                  // Show "Quitar" if the caller is owner (can kick anyone) OR
+                  // if this row is the caller themselves (self-leave).
+                  (isOwner || m.user_id === currentUserId) && (
+                    <button type="button" className="btn-ghost" onClick={() => onRemove(m.user_id, m.email)}>
+                      {m.user_id === currentUserId ? 'Salir' : 'Quitar'}
+                    </button>
+                  )}
               </li>
             ))}
           </ul>

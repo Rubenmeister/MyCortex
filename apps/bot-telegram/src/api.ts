@@ -64,10 +64,14 @@ export class ApiClient {
   }
 
   private async post<T>(path: string, id: BotIdentity, body?: unknown): Promise<T> {
+    // headers() sets Content-Type: application/json, which makes Fastify
+    // reject empty bodies with FST_ERR_CTP_EMPTY_JSON_BODY. Send `{}` when
+    // the caller doesn't supply a body so endpoints like /cortex/run still
+    // accept POSTs.
     const res = await fetch(`${this.cfg.API_URL}${path}`, {
       method: 'POST',
       headers: this.headers(id),
-      body: body !== undefined ? JSON.stringify(body) : undefined,
+      body: JSON.stringify(body ?? {}),
     });
     if (!res.ok) {
       throw new Error(`api ${path} failed: ${res.status} ${await res.text()}`);

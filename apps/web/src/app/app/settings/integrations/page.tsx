@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { publicConfig } from '../../../../lib/publicConfig';
 import { supabase } from '../../../../lib/supabase';
@@ -1415,6 +1415,8 @@ function TelegramSection() {
   const [pending, setPending] = useState<TelegramStartLinkResult | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Hold the polling interval id in a ref so unmount can clear it cleanly.
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const load = useCallback(async () => {
     setErr(null);
@@ -1428,6 +1430,14 @@ function TelegramSection() {
 
   useEffect(() => {
     void load();
+    // Clear any pending poll on unmount to avoid leaking intervals + API
+    // calls for a no-longer-mounted component.
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
   }, [load]);
 
   const onStartLink = async () => {
@@ -1442,12 +1452,17 @@ function TelegramSection() {
         window.open(result.deep_link, '_blank', 'noopener,noreferrer');
       }
       // Re-poll links every 3s for up to 60s so the UI updates when the
-      // user finishes the linking in Telegram.
+      // user finishes the linking in Telegram. Old interval (if any) is
+      // cleared before starting a fresh one.
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       let attempts = 0;
-      const interval = setInterval(async () => {
+      pollIntervalRef.current = setInterval(async () => {
         attempts += 1;
         await load();
-        if (attempts >= 20) clearInterval(interval);
+        if (attempts >= 20 && pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
       }, 3000);
     } catch (e) {
       setErr(String(e));

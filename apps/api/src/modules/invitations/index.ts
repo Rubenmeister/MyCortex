@@ -93,11 +93,15 @@ export const invitationsModule: FastifyPluginAsync = async (server) => {
 
     // Verify the authed user's email matches the invitation. Prevents
     // someone with a stolen token from accepting as the wrong user.
+    //
+    // We deliberately do NOT echo the invitation's target email in the
+    // 403 response — that would let anyone holding a (potentially leaked
+    // or guessed) token enumerate who it was sent to. We only echo the
+    // CALLER's own email since they obviously know it already.
     const { data: caller } = await db.auth.admin.getUserById(auth.userId);
     if (!caller?.user?.email || caller.user.email.toLowerCase() !== inv.email.toLowerCase()) {
       return reply.code(403).send({
         error: 'email_mismatch',
-        invitation_email: inv.email,
         your_email: caller?.user?.email ?? null,
       });
     }

@@ -81,8 +81,11 @@ export default function InvitePage() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         if (body?.error === 'email_mismatch') {
+          // API no longer echoes the invitation's target email (to avoid
+          // disclosing it on token-only guesses), but the FE already has
+          // it from the GET above — show that instead.
           throw new Error(
-            `Tu cuenta (${body.your_email}) no coincide con la invitación (${body.invitation_email}). Salí y entrá con la cuenta correcta.`,
+            `Tu cuenta (${body.your_email ?? '?'}) no coincide con la invitación a ${invitation?.email ?? 'este workspace'}. Salí y entrá con la cuenta correcta.`,
           );
         }
         if (body?.error === 'invitation_expired') {

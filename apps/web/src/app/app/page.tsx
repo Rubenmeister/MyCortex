@@ -25,26 +25,40 @@ export default function AppHomePage() {
   const [integrations, setIntegrations] = useState<Integration[] | null>(null);
   const [recent, setRecent] = useState<RecentNode[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!current) return;
     setLoading(true);
+    setLoadError(null);
     try {
       const { data: sess } = await supabase.auth.getSession();
       const token = sess.session?.access_token;
-      const headers: Record<string, string> = token
-        ? { Authorization: `Bearer ${token}`, 'X-MyCortex-Workspace-Id': current.id }
-        : {};
+      if (!token) {
+        throw new Error('not_authenticated');
+      }
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+        'X-MyCortex-Workspace-Id': current.id,
+      };
 
-      const [intResp, nodes] = await Promise.all([
-        fetch(`${publicConfig.apiUrl}/integrations`, { headers }).then((r) =>
-          r.ok ? r.json() : { integrations: [] },
-        ),
+      // Fetch both surfaces. Each handles its own error: integrations is
+      // load-critical for the onboarding checklist (so surfacing failures
+      // there is important — otherwise a 5xx looks like "0 sources" and
+      // the checklist misleads the user). Recent is non-critical (empty
+      // list is a fine fallback).
+      const [intRes, nodes] = await Promise.all([
+        fetch(`${publicConfig.apiUrl}/integrations`, { headers }),
         listRecent(5).catch(() => []),
       ]);
-      setIntegrations(intResp.integrations as Integration[]);
+      if (!intRes.ok) {
+        throw new Error(`integrations ${intRes.status}: ${(await intRes.text()).slice(0, 120)}`);
+      }
+      const intJson = (await intRes.json()) as { integrations: Integration[] };
+      setIntegrations(intJson.integrations);
       setRecent(nodes);
-    } catch {
+    } catch (err) {
+      setLoadError(String(err));
       setIntegrations([]);
       setRecent([]);
     } finally {
@@ -78,6 +92,15 @@ export default function AppHomePage() {
     <div className="page">
       <header className="head">
         <h1>Hola{current.is_personal ? '' : `, ${current.name}`}</h1>
+        {loadError && (
+          <div className="load-err" role="alert">
+            ⚠ No pudimos cargar tu workspace ({loadError.slice(0, 100)}). Algunas
+            secciones pueden estar incompletas.{' '}
+            <button type="button" className="retry-btn" onClick={() => void load()}>
+              Reintentar
+            </button>
+          </div>
+        )}
         <p className="sub">
           {isNewUser
             ? 'Conectá tu primera fuente para empezar a usar tu segundo cerebro.'
@@ -256,6 +279,9 @@ const styles = `
   .head { margin-bottom: 28px; }
   h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: -1px; }
   .sub { color: #888; font-size: 14px; margin: 0; }
+  .load-err { background: #2a1a1a; border: 1px solid #4a2a2a; color: #ff9b9b; padding: 10px 14px; border-radius: 8px; font-size: 13px; margin: 12px 0; }
+  .retry-btn { background: transparent; border: 1px solid #ff9b9b; color: #ff9b9b; padding: 3px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; margin-left: 8px; }
+  .retry-btn:hover { background: #ff9b9b; color: #2a1a1a; }
   .muted { color: #888; font-size: 13px; }
 
   .card { background: #0e0e14; border: 1px solid #1a1a22; border-radius: 14px; padding: 22px; margin-bottom: 24px; }

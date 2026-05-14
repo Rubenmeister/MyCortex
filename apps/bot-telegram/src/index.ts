@@ -175,7 +175,12 @@ bot.on(message('text'), async (ctx) => {
     const res = await api.ingest(id, { source: 'telegram', text });
     await ctx.reply(formatIngest(res), { parse_mode: 'Markdown' });
   } catch (err) {
-    ctx.telegram.sendMessage(ctx.chat.id, `❌ ${String(err).slice(0, 200)}`).catch(() => {});
+    // In webhook mode Cloud Run may freeze the request between Fastify
+    // ACK and the actual Telegram API call. Awaiting ensures the error
+    // message reaches the user before the function returns.
+    await ctx.telegram
+      .sendMessage(ctx.chat.id, `❌ ${String(err).slice(0, 200)}`)
+      .catch(() => {});
   }
 });
 
