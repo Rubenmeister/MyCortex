@@ -212,6 +212,55 @@ export async function getLatestWeekly(): Promise<DailyDigest | null> {
   return json.digest;
 }
 
+// ---- WhatsApp multi-user linking ---------------------------------------
+
+export type WhatsAppLink = {
+  phone_number: string;
+  workspace_id: string;
+  display_name: string | null;
+  linked_at: string;
+};
+
+export type WhatsAppStartLinkResult = {
+  token: string;
+  display_number: string | null;
+  message_to_send: string;
+  expires_at: string;
+};
+
+export async function startWhatsAppLink(): Promise<WhatsAppStartLinkResult> {
+  const res = await fetch(`${API_URL}/integrations/whatsapp/start-link`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) {
+    throw new Error(`whatsapp_start ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  return res.json();
+}
+
+export async function listWhatsAppLinks(): Promise<WhatsAppLink[]> {
+  const res = await fetch(`${API_URL}/integrations/whatsapp/links`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`whatsapp_links ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+  const json = (await res.json()) as { links: WhatsAppLink[] };
+  return json.links;
+}
+
+export async function unlinkWhatsApp(phone: string): Promise<void> {
+  const res = await fetch(`${API_URL}/integrations/whatsapp/links/${encodeURIComponent(phone)}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`whatsapp_unlink ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  }
+}
+
 // ---- Telegram multi-user linking ---------------------------------------
 
 export type TelegramLink = {

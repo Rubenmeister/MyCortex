@@ -8,6 +8,7 @@ import { askModule } from './modules/ask/index.js';
 import { workspacesModule } from './modules/workspaces/index.js';
 import { integrationsModule } from './modules/integrations/index.js';
 import { invitationsModule } from './modules/invitations/index.js';
+import { whatsappModule } from './modules/whatsapp/index.js';
 import { getEnv } from './lib/env.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
@@ -36,6 +37,9 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(workspacesModule, { prefix: '/workspaces' });
   await server.register(integrationsModule, { prefix: '/integrations' });
   await server.register(invitationsModule, { prefix: '/invitations' });
+  // WhatsApp module registers its own /webhooks/whatsapp + /integrations/whatsapp/*
+  // routes so it owns the path namespace (Meta expects /webhooks/whatsapp).
+  await server.register(whatsappModule);
 
   return server;
 }

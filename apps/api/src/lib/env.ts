@@ -37,6 +37,23 @@ const EnvSchema = z.object({
    *  doesn't expose the master DB key. */
   OAUTH_STATE_SECRET: optKey,
 
+  // ---- WhatsApp Cloud API (Meta) ----
+  /** Permanent access token from Meta Business app. Required to send
+   *  messages and to verify webhook ownership at registration time. */
+  WHATSAPP_ACCESS_TOKEN: optKey,
+  /** WhatsApp Business phone number ID — NOT the phone number itself.
+   *  Comes from Meta dashboard once a number is added. */
+  WHATSAPP_PHONE_NUMBER_ID: optKey,
+  /** Display phone number including country code (e.g. +593987654321).
+   *  Shown to users in the linking instructions ("send to this number"). */
+  WHATSAPP_DISPLAY_NUMBER: optKey,
+  /** Shared secret used during webhook verification GET handshake +
+   *  validated as the X-Hub-Signature on incoming POST webhooks. */
+  WHATSAPP_VERIFY_TOKEN: optKey,
+  /** App secret from Meta — used to validate incoming webhook signatures
+   *  (X-Hub-Signature-256 HMAC-SHA256 of request body). */
+  WHATSAPP_APP_SECRET: optKey,
+
   // Google OAuth (Drive, Gmail). Optional — integrations gracefully
   // disable themselves if these aren't configured. Each provider has its
   // own redirect URI registered in Google Cloud Console.

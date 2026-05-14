@@ -7,10 +7,15 @@ import { supabase } from '../../../../lib/supabase';
 import { useWorkspace } from '../../../../lib/workspace';
 import {
   listTelegramLinks,
+  listWhatsAppLinks,
   startTelegramLink,
+  startWhatsAppLink,
   unlinkTelegram,
+  unlinkWhatsApp,
   type TelegramLink,
   type TelegramStartLinkResult,
+  type WhatsAppLink,
+  type WhatsAppStartLinkResult,
 } from '../../../../lib/api';
 
 type Integration = {
@@ -378,6 +383,8 @@ export default function IntegrationsPage() {
       )}
 
       <TelegramSection />
+
+      <WhatsAppSection />
 
       <section className="card disabled">
         <div className="head">
@@ -1597,6 +1604,198 @@ function TelegramSection() {
           border-radius: 3px;
           font-size: 11px;
         }
+      `}</style>
+    </section>
+  );
+}
+
+function WhatsAppSection() {
+  const [links, setLinks] = useState<WhatsAppLink[] | null>(null);
+  const [pending, setPending] = useState<WhatsAppStartLinkResult | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const load = useCallback(async () => {
+    setErr(null);
+    try {
+      const list = await listWhatsAppLinks();
+      setLinks(list);
+    } catch (e) {
+      setErr(String(e));
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
+    };
+  }, [load]);
+
+  const onStartLink = async () => {
+    setBusy('start');
+    setErr(null);
+    try {
+      const result = await startWhatsAppLink();
+      setPending(result);
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      let attempts = 0;
+      pollIntervalRef.current = setInterval(async () => {
+        attempts += 1;
+        await load();
+        if (attempts >= 20 && pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }, 3000);
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onUnlink = async (phone: string) => {
+    if (!confirm('¿Desvincular este número de WhatsApp?')) return;
+    setBusy(`unlink-${phone}`);
+    try {
+      await unlinkWhatsApp(phone);
+      await load();
+    } catch (e) {
+      setErr(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* no-op */
+    }
+  };
+
+  return (
+    <section className="card">
+      <div className="head">
+        <span className="provider-icon">💚</span>
+        <div>
+          <div className="provider-name">WhatsApp</div>
+          <div className="provider-desc">
+            Mandá texto, voz o imágenes al número oficial de MyCortex desde tu WhatsApp. Cada miembro vincula su propio chat.
+          </div>
+        </div>
+      </div>
+
+      {err && <div className="alert alert-err">{err}</div>}
+
+      {links && links.length > 0 ? (
+        <ul className="src-list" style={{ marginBottom: 14 }}>
+          {links.map((l) => (
+            <li key={l.phone_number}>
+              <div className="src-name">
+                📱 {l.display_name ?? `+${l.phone_number}`}
+                <span style={{ color: '#888', marginLeft: 6, fontSize: 12 }}>+{l.phone_number}</span>
+              </div>
+              <div className="src-meta">
+                vinculado {new Date(l.linked_at).toLocaleString()}
+              </div>
+              <button
+                type="button"
+                className="src-rm"
+                onClick={() => onUnlink(l.phone_number)}
+                disabled={busy === `unlink-${l.phone_number}`}
+              >
+                Desvincular
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="muted" style={{ marginBottom: 14, fontSize: 13 }}>
+          {links === null ? 'Cargando…' : 'Aún no vinculaste tu WhatsApp.'}
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={onStartLink}
+        disabled={busy === 'start'}
+      >
+        {busy === 'start' ? '…' : 'Vincular WhatsApp'}
+      </button>
+
+      {pending && (
+        <div className="wa-pending">
+          <div className="wa-pending-title">📞 Mandá este mensaje desde WhatsApp</div>
+          <div className="wa-pending-step">
+            <span className="wa-step-num">1</span>
+            <div>
+              <strong>Abrí WhatsApp</strong> en tu teléfono y mandale un mensaje a:
+              <div className="wa-number">
+                <span>{pending.display_number ?? 'Número de MyCortex (no configurado todavía)'}</span>
+                {pending.display_number && (
+                  <button
+                    type="button"
+                    className="wa-copy"
+                    onClick={() => copyToClipboard(pending.display_number!)}
+                  >
+                    Copiar
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="wa-pending-step">
+            <span className="wa-step-num">2</span>
+            <div>
+              <strong>Enviá exactamente</strong>:
+              <div className="wa-message">
+                <code>{pending.message_to_send}</code>
+                <button
+                  type="button"
+                  className="wa-copy"
+                  onClick={() => copyToClipboard(pending.message_to_send)}
+                >
+                  Copiar
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="wa-pending-step">
+            <span className="wa-step-num">3</span>
+            <div>
+              El bot te responde <strong>"✅ Vinculado"</strong> y ya estás listo. Esta página se actualiza sola.
+            </div>
+          </div>
+          <div className="wa-pending-sub">
+            Token válido hasta {new Date(pending.expires_at).toLocaleTimeString()}.
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        .wa-pending {
+          margin-top: 14px;
+          padding: 16px 16px;
+          background: #122212;
+          border: 1px solid #1f3a1f;
+          border-radius: 10px;
+        }
+        .wa-pending-title { color: #9c9; font-size: 13px; font-weight: 700; margin-bottom: 14px; }
+        .wa-pending-step { display: grid; grid-template-columns: 28px 1fr; gap: 10px; margin-bottom: 12px; color: #ccc; font-size: 13px; line-height: 1.5; }
+        .wa-step-num { background: #1f3a1f; color: #9c9; width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; }
+        .wa-number, .wa-message { display: flex; align-items: center; gap: 8px; margin-top: 4px; background: #0a0a12; padding: 6px 10px; border-radius: 6px; border: 1px solid #1a1a22; }
+        .wa-number :global(span), .wa-message :global(code) { color: #9c9; font-family: monospace; font-size: 13px; flex: 1; }
+        .wa-copy { background: transparent; border: 1px solid #2a3a2a; color: #aac; padding: 2px 8px; border-radius: 4px; font-size: 10px; cursor: pointer; }
+        .wa-copy:hover { background: #1a2a1a; color: #fff; }
+        .wa-pending-sub { color: #666; font-size: 11px; margin-top: 8px; }
       `}</style>
     </section>
   );

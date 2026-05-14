@@ -12,7 +12,8 @@ export type IngestSource =
   | 'gmail'
   | 'calendar'
   | 'notion'
-  | 'slack';
+  | 'slack'
+  | 'whatsapp';
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
 
 export type Json = string | number | boolean | null | { [k: string]: Json } | Json[];
@@ -249,6 +250,42 @@ export type SyncSourceInsert = {
 export type SyncSourceUpdate = Partial<
   Omit<SyncSourceInsert, 'integration_id' | 'workspace_id' | 'external_id'>
 >;
+
+// ---- WhatsApp links ----------------------------------------------------
+
+export type WhatsAppLinkRow = {
+  phone_number: string;
+  user_id: string;
+  workspace_id: string;
+  display_name: string | null;
+  linked_at: string;
+  linked_by_token: string | null;
+};
+
+export type WhatsAppLinkInsert = {
+  phone_number: string;
+  user_id: string;
+  workspace_id: string;
+  display_name?: string | null;
+  linked_by_token?: string | null;
+};
+
+export type WhatsAppLinkTokenRow = {
+  token: string;
+  user_id: string;
+  workspace_id: string;
+  created_at: string;
+  expires_at: string;
+  used_at: string | null;
+  used_by_phone_number: string | null;
+};
+
+export type WhatsAppLinkTokenInsert = {
+  token: string;
+  user_id: string;
+  workspace_id: string;
+  expires_at?: string;
+};
 
 // ---- Telegram links ----------------------------------------------------
 
@@ -490,6 +527,18 @@ export type Database = {
         Row: TelegramLinkTokenRow;
         Insert: TelegramLinkTokenInsert;
         Update: Partial<TelegramLinkTokenRow>;
+        Relationships: [];
+      };
+      whatsapp_links: {
+        Row: WhatsAppLinkRow;
+        Insert: WhatsAppLinkInsert;
+        Update: Partial<WhatsAppLinkInsert>;
+        Relationships: [];
+      };
+      whatsapp_link_tokens: {
+        Row: WhatsAppLinkTokenRow;
+        Insert: WhatsAppLinkTokenInsert;
+        Update: Partial<WhatsAppLinkTokenRow>;
         Relationships: [];
       };
     };
