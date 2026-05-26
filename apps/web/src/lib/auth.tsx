@@ -14,6 +14,7 @@ type AuthState = {
   session: Session | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
   signOut: () => Promise<void>;
 };
 
@@ -44,6 +45,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const signUp: AuthState['signUp'] = async (email, password) => {
+    // The `handle_new_user()` trigger on auth.users auto-creates a
+    // personal workspace + owner membership row, so a fresh signup
+    // lands directly into a usable workspace.
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message, needsConfirmation: false };
+    // If "Confirm email" is enabled in Supabase Auth settings, signUp
+    // succeeds but no session is returned — the user has to click the
+    // email link before they can log in. We surface that to the UI so
+    // it can show the "check your inbox" hint instead of a blank state.
+    const needsConfirmation = !data.session;
+    return { error: null, needsConfirmation };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
@@ -51,7 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     // @ts-expect-error — multi-version @types/react in workspace (mobile=18,
     // web=19) confuses JSX type unification. Runtime is fine.
-    <Ctx.Provider value={{ session, loading, signIn, signOut }}>{children}</Ctx.Provider>
+    <Ctx.Provider value={{ session, loading, signIn, signUp, signOut }}>{children}</Ctx.Provider>
   );
 }
 

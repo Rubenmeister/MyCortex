@@ -32,7 +32,7 @@ function LoginFormFallback() {
 }
 
 function LoginForm() {
-  const { signIn } = useAuth();
+  const { signIn, signUp } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   // Allow callers (e.g. /invite/:token) to send the user back to a
@@ -41,20 +41,47 @@ function LoginForm() {
   const next = searchParams.get('next');
   const safeNext = next && next.startsWith('/') ? next : '/app';
 
+  // `mode` toggles the same form between signin and signup so we avoid
+  // a second route. Defaults to signin; if the URL has ?mode=signup
+  // (used by the shared invitation link) we land directly on signup.
+  const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
+  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (password.length < 6) {
+      setErr('La contraseña debe tener al menos 6 caracteres.');
+      return;
+    }
     setBusy(true);
     setErr(null);
-    const r = await signIn(email.trim(), password);
-    setBusy(false);
-    if (r.error) setErr(r.error);
-    else router.replace(safeNext);
+    setInfo(null);
+    if (mode === 'signin') {
+      const r = await signIn(email.trim(), password);
+      setBusy(false);
+      if (r.error) setErr(r.error);
+      else router.replace(safeNext);
+    } else {
+      const r = await signUp(email.trim(), password);
+      setBusy(false);
+      if (r.error) {
+        setErr(r.error);
+      } else if (r.needsConfirmation) {
+        // Email confirmation flow: tell the user to check their inbox.
+        setInfo('Te enviamos un email para confirmar tu cuenta. Una vez confirmado, podrás entrar.');
+      } else {
+        // Session was returned directly — auto-redirect into the app.
+        router.replace(safeNext);
+      }
+    }
   };
+
+  const isSignup = mode === 'signup';
 
   return (
     <main className="login-root">
@@ -76,12 +103,25 @@ function LoginForm() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="••••••••"
-          autoComplete="current-password"
+          autoComplete={isSignup ? 'new-password' : 'current-password'}
+          minLength={6}
           required
         />
         {err && <div className="error">{err}</div>}
+        {info && <div className="info">{info}</div>}
         <button type="submit" disabled={busy}>
-          {busy ? '…' : 'Entrar'}
+          {busy ? '…' : isSignup ? 'Crear cuenta' : 'Entrar'}
+        </button>
+        <button
+          type="button"
+          className="link"
+          onClick={() => {
+            setMode(isSignup ? 'signin' : 'signup');
+            setErr(null);
+            setInfo(null);
+          }}
+        >
+          {isSignup ? '¿Ya tenés cuenta? Entrá' : '¿Sos nuevo? Creá tu cuenta'}
         </button>
       </form>
       <style jsx>{`
@@ -137,6 +177,12 @@ function LoginForm() {
           font-size: 13px;
           margin-top: 12px;
         }
+        .info {
+          color: #7ec99a;
+          font-size: 13px;
+          margin-top: 12px;
+          line-height: 1.4;
+        }
         button {
           margin-top: 24px;
           background: #fff;
@@ -151,6 +197,17 @@ function LoginForm() {
         button:disabled {
           opacity: 0.5;
           cursor: not-allowed;
+        }
+        button.link {
+          margin-top: 16px;
+          background: transparent;
+          color: #888;
+          font-weight: 400;
+          font-size: 13px;
+          padding: 8px;
+        }
+        button.link:hover {
+          color: #ccc;
         }
       `}</style>
     </main>
