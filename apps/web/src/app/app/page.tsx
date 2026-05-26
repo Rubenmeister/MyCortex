@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useWorkspace } from '../../lib/workspace';
-import { listRecent, type RecentNode } from '../../lib/api';
+import { listRecent, listTelegramLinks, type RecentNode } from '../../lib/api';
 import { publicConfig } from '../../lib/publicConfig';
 import { supabase } from '../../lib/supabase';
 
@@ -24,6 +24,7 @@ export default function AppHomePage() {
   const { current, workspaces } = useWorkspace();
   const [integrations, setIntegrations] = useState<Integration[] | null>(null);
   const [recent, setRecent] = useState<RecentNode[] | null>(null);
+  const [hasTelegram, setHasTelegram] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -42,14 +43,15 @@ export default function AppHomePage() {
         'X-MyCortex-Workspace-Id': current.id,
       };
 
-      // Fetch both surfaces. Each handles its own error: integrations is
-      // load-critical for the onboarding checklist (so surfacing failures
-      // there is important — otherwise a 5xx looks like "0 sources" and
-      // the checklist misleads the user). Recent is non-critical (empty
-      // list is a fine fallback).
-      const [intRes, nodes] = await Promise.all([
+      // Fetch all surfaces. Cada uno maneja sus errores:
+      //   - integrations: load-critical para el checklist (un 5xx no debe
+      //     parecer "0 sources" porque engañaría al user).
+      //   - recent: non-critical (empty list es fallback aceptable).
+      //   - telegram: non-critical (default false si falla).
+      const [intRes, nodes, tgLinks] = await Promise.all([
         fetch(`${publicConfig.apiUrl}/integrations`, { headers }),
         listRecent(5).catch(() => []),
+        listTelegramLinks().catch(() => []),
       ]);
       if (!intRes.ok) {
         throw new Error(`integrations ${intRes.status}: ${(await intRes.text()).slice(0, 120)}`);
@@ -57,6 +59,7 @@ export default function AppHomePage() {
       const intJson = (await intRes.json()) as { integrations: Integration[] };
       setIntegrations(intJson.integrations);
       setRecent(nodes);
+      setHasTelegram(tgLinks.length > 0);
     } catch (err) {
       setLoadError(String(err));
       setIntegrations([]);
@@ -84,9 +87,71 @@ export default function AppHomePage() {
   const hasGmail = activeIntegrations.some((i) => i.provider === 'gmail');
   const hasCal = activeIntegrations.some((i) => i.provider === 'google_calendar');
   const hasNotes = (recent?.length ?? 0) > 0;
-  const completed = [hasDrive, hasGmail, hasCal, hasNotes].filter(Boolean).length;
-  const total = 4;
+  // Onboarding steps en el orden recomendado de completion (más fácil
+  // primero, más complejo al final). El "próximo paso recomendado" es el
+  // primero con done=false — se highlightea visualmente.
+  const steps: Array<{
+    key: string;
+    done: boolean;
+    title: string;
+    desc: string;
+    href: string;
+    cta: string;
+    icon: string;
+  }> = [
+    {
+      key: 'note',
+      done: hasNotes,
+      title: 'Capturá tu primera nota',
+      desc: 'Texto rápido, voz, o desde Telegram. Lo que sea que quieras recordar.',
+      href: '/app/capture',
+      cta: 'Capturar',
+      icon: '✎',
+    },
+    {
+      key: 'drive',
+      done: hasDrive,
+      title: 'Conectá Google Drive',
+      desc: 'PDFs, Google Docs, Sheets — todo se indexa y se vuelve buscable + citable.',
+      href: '/app/settings/integrations',
+      cta: 'Conectar',
+      icon: '📁',
+    },
+    {
+      key: 'gmail',
+      done: hasGmail,
+      title: 'Conectá Gmail',
+      desc: "Tus mails recientes (90 días INBOX por defecto). Ideal para 'qué me dijo X sobre Y'.",
+      href: '/app/settings/integrations',
+      cta: 'Conectar',
+      icon: '📧',
+    },
+    {
+      key: 'calendar',
+      done: hasCal,
+      title: 'Conectá Google Calendar',
+      desc: 'Eventos pasados + próximos. El briefing diario los incluye automáticamente.',
+      href: '/app/settings/integrations',
+      cta: 'Conectar',
+      icon: '📅',
+    },
+    {
+      key: 'telegram',
+      done: hasTelegram,
+      title: 'Vinculá Telegram',
+      desc: 'Mandale audio, fotos o texto al bot y todo entra a tu cerebro. Ideal cuando estás en la calle.',
+      href: '/app/settings/integrations',
+      cta: 'Vincular',
+      icon: '📲',
+    },
+  ];
+  const completed = steps.filter((s) => s.done).length;
+  const total = steps.length;
   const isNewUser = completed === 0;
+  // El próximo paso recomendado es el primer step no-completado en el
+  // orden definido arriba. Lo destacamos visualmente para que el user no
+  // tenga que decidir qué hacer next.
+  const nextStepKey = steps.find((s) => !s.done)?.key;
 
   return (
     <div className="page">
@@ -126,38 +191,18 @@ export default function AppHomePage() {
           </div>
 
           <ul className="checklist">
-            <ChecklistItem
-              done={hasNotes}
-              title="Capturá tu primera nota"
-              desc="Texto rápido, voz, o desde Telegram. Lo que sea que quieras recordar."
-              href="/app/capture"
-              cta="Capturar"
-              icon="✎"
-            />
-            <ChecklistItem
-              done={hasDrive}
-              title="Conectá Google Drive"
-              desc="PDFs, Google Docs, Sheets — todo se indexa y se vuelve buscable + citable."
-              href="/app/settings/integrations"
-              cta="Conectar"
-              icon="📁"
-            />
-            <ChecklistItem
-              done={hasGmail}
-              title="Conectá Gmail"
-              desc="Tus mails recientes (90 días INBOX por defecto). Ideal para 'qué me dijo X sobre Y'."
-              href="/app/settings/integrations"
-              cta="Conectar"
-              icon="📧"
-            />
-            <ChecklistItem
-              done={hasCal}
-              title="Conectá Google Calendar"
-              desc="Eventos pasados + próximos. El briefing diario los incluye automáticamente."
-              href="/app/settings/integrations"
-              cta="Conectar"
-              icon="📅"
-            />
+            {steps.map((s) => (
+              <ChecklistItem
+                key={s.key}
+                done={s.done}
+                title={s.title}
+                desc={s.desc}
+                href={s.href}
+                cta={s.cta}
+                icon={s.icon}
+                isNext={s.key === nextStepKey}
+              />
+            ))}
           </ul>
         </section>
       )}
@@ -250,6 +295,7 @@ function ChecklistItem({
   href,
   cta,
   icon,
+  isNext,
 }: {
   done: boolean;
   title: string;
@@ -257,16 +303,25 @@ function ChecklistItem({
   href: string;
   cta: string;
   icon: string;
+  isNext?: boolean;
 }) {
+  // Tres estados visuales:
+  //   - done: opaco, check verde
+  //   - isNext (próximo recomendado): borde resaltado + label "PRÓXIMO PASO"
+  //   - normal: neutro
+  const cls = done ? 'check-item done' : isNext ? 'check-item next' : 'check-item';
   return (
-    <li className={done ? 'check-item done' : 'check-item'}>
+    <li className={cls}>
       <div className="check-box">{done ? '✓' : icon}</div>
       <div className="check-body">
-        <div className="check-title">{title}</div>
+        <div className="check-title">
+          {title}
+          {isNext && !done && <span className="next-badge">PRÓXIMO PASO</span>}
+        </div>
         <div className="check-desc">{desc}</div>
       </div>
       {!done && (
-        <Link href={href} className="check-cta">
+        <Link href={href} className={isNext ? 'check-cta next-cta' : 'check-cta'}>
           {cta} →
         </Link>
       )}
@@ -290,10 +345,14 @@ const styles = `
   .onboarding-sub { color: #888; font-size: 13px; margin-top: 2px; }
   .progress-num { background: #1a1a2a; color: #aac; padding: 4px 12px; border-radius: 99px; font-size: 12px; font-weight: 700; border: 1px solid #2a2a3a; }
   .checklist { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-  .check-item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; background: #0a0a12; border: 1px solid #15151c; border-radius: 10px; }
+  .check-item { display: grid; grid-template-columns: auto 1fr auto; gap: 14px; align-items: center; padding: 14px 16px; background: #0a0a12; border: 1px solid #15151c; border-radius: 10px; transition: border-color 0.15s; }
   .check-item.done { opacity: 0.55; }
+  .check-item.next { border-color: #f5b133; background: linear-gradient(135deg, rgba(245,177,51,0.06), transparent); }
   .check-box { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; background: #1a1a2a; border-radius: 50%; font-size: 16px; }
   .check-item.done .check-box { background: #1a3a1a; color: #9c9; }
+  .check-item.next .check-box { background: #f5b133; color: #1a1206; }
+  .next-badge { display: inline-block; background: #f5b133; color: #1a1206; font-size: 9px; font-weight: 800; padding: 2px 7px; border-radius: 99px; margin-left: 8px; letter-spacing: 0.4px; vertical-align: middle; }
+  :global(.next-cta) { background: #f5b133 !important; color: #1a1206 !important; border-color: #f5b133 !important; }
   .check-title { color: #fff; font-size: 14px; font-weight: 600; }
   .check-desc { color: #888; font-size: 12px; line-height: 1.45; margin-top: 2px; }
   :global(.check-cta) { color: #ddd; background: transparent; border: 1px solid #2a2a3a; padding: 6px 14px; border-radius: 8px; font-size: 12px; text-decoration: none; font-weight: 600; }

@@ -13,8 +13,10 @@ import { useAuth } from '../../lib/auth';
  */
 export default function LoginPage() {
   return (
-    // @ts-expect-error — multi-version @types/react in workspace (mobile=18,
-    // web=19) confuses JSX type unification on Suspense. Runtime is fine.
+    // El @ts-expect-error que vivía acá ya no es necesario — al quitar los
+    // workspace deps del mobile app, @types/react se unificó en la workspace
+    // y JSX type unification anda. Si vuelve a fallar en Vercel build,
+    // re-meter el directive arriba de <Suspense>.
     <Suspense fallback={<LoginFormFallback />}>
       <LoginForm />
     </Suspense>

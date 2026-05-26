@@ -78,8 +78,6 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const current = workspaces.find((w) => w.id === currentId) ?? null;
 
   return (
-    // @ts-expect-error — multi-version @types/react in workspace (mobile=18,
-    // web=19) confuses JSX type unification. Runtime is fine.
     <Ctx.Provider value={{ workspaces, current, loading, error, switchTo, refresh }}>
       {children}
     </Ctx.Provider>

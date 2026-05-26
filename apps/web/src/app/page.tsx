@@ -51,7 +51,8 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="trust">
-          Tus datos viven en tu workspace. Multi-tenant con aislamiento RLS. Open by default.
+          Tu workspace es tuyo y de nadie más (Row-Level Security en Postgres). No
+          vendemos tus datos. No entrenamos modelos públicos con ellos.
         </div>
       </section>
 
@@ -134,9 +135,66 @@ export default function HomePage() {
         </div>
       </section>
 
+      <section className="faq">
+        <h2 className="section-title">Preguntas frecuentes</h2>
+        <div className="faq-list">
+          <details className="faq-item">
+            <summary>¿Mis datos están seguros?</summary>
+            <p>
+              Sí. Tu workspace es tuyo y de nadie más — usamos Row-Level Security en
+              Postgres para aislar workspaces. Yo (Rubén, fundador) no leo tu
+              contenido, solo veo métricas agregadas. Los tokens OAuth viven
+              cifrados en Google Secret Manager. No vendemos datos a nadie ni
+              entrenamos modelos públicos con ellos. <Link href="/privacy">Detalle
+              completo en privacidad</Link>.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>¿Qué pasa con mi contenido si cancelo?</summary>
+            <p>
+              Lo borramos en 30 días (los backups cifrados rotan en 90 días después
+              de eso). Antes de cancelar podés exportar todo a JSON desde
+              <em> Configuración → Exportar mi cerebro</em>.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>¿Cuándo van a cobrar?</summary>
+            <p>
+              Hoy todo es gratis (beta). Cuando saquemos planes pagos (Pro $12,
+              Team $24/user), te avisamos con 30 días de anticipación. Tu uso actual
+              queda en el plan free para siempre, no cobramos retroactivo.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>¿Funciona en español?</summary>
+            <p>
+              Sí, de punta a punta. Búsqueda multilingüe (reranker Cohere), respuestas
+              en el idioma de la pregunta, transcripción de voz en español ecuatoriano
+              y argentino sin problema.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>¿Hay app móvil?</summary>
+            <p>
+              APK Android disponible bajo pedido (en beta). iOS llega después.
+              Mientras tanto, la versión web anda perfecto desde el browser del celu
+              — la mayoría de testers la usan así.
+            </p>
+          </details>
+          <details className="faq-item">
+            <summary>¿Puedo conectar Notion / Slack / WhatsApp?</summary>
+            <p>
+              WhatsApp y Notion están en roadmap (Q3 2026). Slack lo skipeamos por ahora
+              — vimos que los testers usan WhatsApp y Telegram más. Si Slack es
+              crítico para tu equipo, escribime y lo subimos en prioridad.
+            </p>
+          </details>
+        </div>
+      </section>
+
       <section className="cta-final">
         <h2>¿Listo para extender tu memoria?</h2>
-        <Link href="/login" className="btn-big">
+        <Link href="/login?mode=signup" className="btn-big">
           Crear cuenta gratis
         </Link>
         <div className="trust" style={{ marginTop: 16 }}>
@@ -145,9 +203,14 @@ export default function HomePage() {
       </section>
 
       <footer className="foot">
-        <div>MyCortex · 2026</div>
+        <div>
+          <strong style={{ color: '#aaa' }}>MyCortex</strong> · un producto de THORN AI
+          Technologies · Quito, Ecuador · 2026
+        </div>
         <div className="foot-links">
           <Link href="/pricing">Precios</Link>
+          <Link href="/terms">Términos</Link>
+          <Link href="/privacy">Privacidad</Link>
           <Link href="/login">Entrar</Link>
         </div>
       </footer>
@@ -272,10 +335,70 @@ export default function HomePage() {
         .features,
         .sources,
         .b2b,
+        .faq,
         .cta-final {
           max-width: 1100px;
           margin: 0 auto;
           padding: 60px 24px;
+        }
+        .faq {
+          max-width: 720px;
+        }
+        .faq-list {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        .faq-item {
+          background: #0e0e14;
+          border: 1px solid #1a1a22;
+          border-radius: 12px;
+          padding: 0;
+          overflow: hidden;
+        }
+        .faq-item summary {
+          padding: 18px 22px;
+          font-weight: 600;
+          color: #fff;
+          font-size: 15px;
+          cursor: pointer;
+          list-style: none;
+          position: relative;
+          padding-right: 48px;
+        }
+        .faq-item summary::-webkit-details-marker {
+          display: none;
+        }
+        .faq-item summary::after {
+          content: '+';
+          position: absolute;
+          right: 22px;
+          top: 50%;
+          transform: translateY(-50%);
+          color: #888;
+          font-size: 22px;
+          line-height: 1;
+          font-weight: 300;
+        }
+        .faq-item[open] summary::after {
+          content: '−';
+        }
+        .faq-item[open] summary {
+          border-bottom: 1px solid #1a1a22;
+        }
+        .faq-item p {
+          margin: 0;
+          padding: 16px 22px 20px;
+          color: #aaa;
+          font-size: 14px;
+          line-height: 1.65;
+        }
+        .faq-item :global(a) {
+          color: #f5b133;
+          text-decoration: none;
+        }
+        .faq-item :global(a):hover {
+          text-decoration: underline;
         }
         .section-title {
           font-size: 28px;
