@@ -147,7 +147,12 @@ export const whatsappModule: FastifyPluginAsync = async (server) => {
   // ---- Webhook: GET (verification handshake) ----------------------------
   // Meta sends ?hub.mode=subscribe&hub.verify_token=X&hub.challenge=Y.
   // We respond with Y if X matches. Required ONCE at webhook registration.
-  server.get('/webhooks/whatsapp', async (req, reply) => {
+  //
+  // Skip rate-limit en ambos endpoints de webhook: Meta puede burstear
+  // notificaciones en spikes legítimos (broadcast a muchos users) y
+  // bloquearlos rompería entregas. La autenticación va por HMAC firma,
+  // no por rate-limit.
+  server.get('/webhooks/whatsapp', { config: { rateLimit: false } }, async (req, reply) => {
     const env = getEnv();
     const q = z
       .object({
@@ -166,7 +171,7 @@ export const whatsappModule: FastifyPluginAsync = async (server) => {
   });
 
   // ---- Webhook: POST (incoming messages) --------------------------------
-  server.post('/webhooks/whatsapp', async (req, reply) => {
+  server.post('/webhooks/whatsapp', { config: { rateLimit: false } }, async (req, reply) => {
     const sigHeader = req.headers['x-hub-signature-256'];
     const raw = typeof req.body === 'string' ? req.body : JSON.stringify(req.body);
     if (!verifySignature(raw, typeof sigHeader === 'string' ? sigHeader : undefined)) {

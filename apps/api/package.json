@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^10.0.0",
+    "@fastify/rate-limit": "^10.2.0",
     "@fastify/sensible": "^6.0.0",
     "@mycortex/ai-core": "workspace:*",
     "@mycortex/cortex-engine": "workspace:*",

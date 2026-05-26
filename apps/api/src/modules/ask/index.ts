@@ -182,7 +182,12 @@ Reglas:
 Match the language of the question.`;
 
 export const askModule: FastifyPluginAsync = async (server) => {
-  server.post('/', async (req, reply) => {
+  // /ask es el endpoint MÁS CARO de toda la API: cada consulta gasta
+  // embeddings + LLM (Claude o GPT-4) + reranker Cohere + opcional TTS.
+  // Costo típico por query: $0.01-0.05. Sin override, el rate limit
+  // global (120/min) deja a un usuario malicioso quemar ~$3.6 USD/min.
+  // 20 req/min es generoso para uso humano normal (1 consulta cada 3s).
+  server.post('/', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
 

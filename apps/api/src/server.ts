@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
@@ -23,12 +24,49 @@ export async function buildServer(): Promise<FastifyInstance> {
     },
     // 10 MB so /ingesta/audio can accept ~5 min of OGG/M4A at base64 inflation.
     bodyLimit: 10 * 1024 * 1024,
+    // Confiar en el X-Forwarded-For que Cloud Run inyecta, así rate-limit
+    // keyea por la IP real del cliente y no por la IP del proxy interno.
+    trustProxy: true,
   });
 
   await server.register(cors, { origin: true });
   await server.register(sensible);
 
-  server.get('/health', async () => ({ status: 'ok', uptime: process.uptime() }));
+  // Rate limit global — protege contra abuse / scrapers / bots accidentales.
+  // Pensar como "uso humano legítimo generoso". Endpoints específicamente
+  // caros (LLM en /ask, transcripción en /ingesta/audio) tienen overrides
+  // más estrictos en sus módulos vía `config: { rateLimit: { max, timeWindow } }`.
+  //
+  // Excepciones: /health (uptime) y /webhooks/whatsapp (Meta burstea) usan
+  // `config: { rateLimit: false }` para skip total.
+  await server.register(rateLimit, {
+    global: true,
+    max: 120,
+    timeWindow: '1 minute',
+    skipOnError: true,
+    keyGenerator: (req) => {
+      // Por token JWT prefix si está autenticado, sino por IP. Evita que
+      // un user con NAT compartido (oficina, café) consuma el cupo de
+      // todos los compañeros que comparten esa IP.
+      const auth = req.headers.authorization;
+      if (auth && auth.startsWith('Bearer ')) {
+        return `bearer:${auth.slice(7, 27)}`;
+      }
+      return req.ip;
+    },
+    errorResponseBuilder: (_req, ctx) => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      message: `Has hecho demasiadas peticiones. Esperá ${Math.ceil(ctx.ttl / 1000)} segundos antes de volver a intentar.`,
+    }),
+  });
+
+  // /health: skip rate limit completamente — Cloud Run + GCP uptime checks
+  // pueden pegar muy seguido y no quiero que se sumen al budget del user.
+  server.get('/health', { config: { rateLimit: false } }, async () => ({
+    status: 'ok',
+    uptime: process.uptime(),
+  }));
 
   await server.register(ingestaModule, { prefix: '/ingesta' });
   await server.register(accionModule, { prefix: '/accion' });

@@ -3,6 +3,10 @@
   "version": "0.0.0",
   "private": true,
   "main": "expo-router/entry",
+  "packageManager": "npm@10.8.2",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "expo start",
     "android": "expo start --android",
@@ -12,7 +16,6 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@mycortex/shared-types": "workspace:*",
     "@supabase/supabase-js": "^2.46.0",
     "expo": "~52.0.0",
     "expo-av": "~15.0.0",
@@ -22,7 +25,9 @@
     "expo-router": "~4.0.0",
     "expo-secure-store": "~14.0.0",
     "expo-status-bar": "~2.0.0",
+    "expo-updates": "~0.26.0",
     "react": "18.3.1",
+    "react-dom": "18.3.1",
     "react-native": "0.76.5",
     "react-native-gesture-handler": "~2.20.0",
     "react-native-reanimated": "~3.16.0",
@@ -32,7 +37,6 @@
   },
   "devDependencies": {
     "@babel/core": "^7.25.0",
-    "@mycortex/config-tsconfig": "workspace:*",
     "@types/react": "~18.3.12",
     "typescript": "^5.7.0"
   }

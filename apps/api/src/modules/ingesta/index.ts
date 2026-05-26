@@ -61,7 +61,11 @@ export const ingestaModule: FastifyPluginAsync = async (server) => {
    *
    * Body limit is bumped to 10 MB at server level — 5 min of OGG/M4A fits.
    */
-  server.post('/audio', async (req, reply) => {
+  // /ingesta/audio dispara Whisper transcription (~$0.006/min) + classify
+  // + embed + opcional enrich. Para 5 min de audio (limit del body 10 MB)
+  // sale ~$0.03 por request. 30 req/hora es razonable: alguien que captura
+  // por voz prolijamente no llega a 30/hora salvo abuse.
+  server.post('/audio', { config: { rateLimit: { max: 30, timeWindow: '1 hour' } } }, async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
 
