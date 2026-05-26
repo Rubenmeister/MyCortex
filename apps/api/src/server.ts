@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
+import { Sentry } from './lib/sentry.js';
 import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
 import { cortexModule } from './modules/cortex/index.js';
@@ -67,6 +68,30 @@ export async function buildServer(): Promise<FastifyInstance> {
     status: 'ok',
     uptime: process.uptime(),
   }));
+
+  // Sentry error handler — captura cualquier error que llegue al boundary
+  // de Fastify (incluye errores no-manejados de handlers). Pre-filtramos
+  // 4xx en beforeSend() de sentry.ts para no enviarlos.
+  server.setErrorHandler((err, request, reply) => {
+    // Solo capturamos errores 5xx o sin statusCode (uncaught).
+    const code = err.statusCode ?? 500;
+    if (code >= 500) {
+      Sentry.captureException(err, {
+        contexts: {
+          request: {
+            method: request.method,
+            url: request.url,
+            // No incluimos body — puede tener PII / tokens.
+          },
+        },
+      });
+    }
+    request.log.error({ err, statusCode: code }, 'request_error');
+    void reply.code(code).send({
+      error: err.name || 'InternalError',
+      message: code >= 500 ? 'Algo se rompió de nuestro lado. Ya lo reportamos.' : err.message,
+    });
+  });
 
   await server.register(ingestaModule, { prefix: '/ingesta' });
   await server.register(accionModule, { prefix: '/accion' });

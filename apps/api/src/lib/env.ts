@@ -66,6 +66,14 @@ const EnvSchema = z.object({
   // Where to redirect the user back to after OAuth (the web app).
   // Defaults to the Vercel prod URL.
   WEB_BASE_URL: z.string().url().default('https://my-cortex-web-gxoh.vercel.app'),
+
+  /** Sentry DSN para captura de errores en producción. Optional —
+   *  si está vacío, Sentry se inicializa pero no envía nada
+   *  (sentry SDK lo trata como "disabled"). */
+  SENTRY_DSN: optKey,
+  /** Sample rate para traces (performance). 0.1 = 10% — suficiente para
+   *  detectar regresiones de p95 sin gastar cupo de Sentry. */
+  SENTRY_TRACES_SAMPLE_RATE: z.coerce.number().min(0).max(1).default(0.1),
 });
 
 export type Env = z.infer<typeof EnvSchema>;
