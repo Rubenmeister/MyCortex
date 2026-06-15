@@ -1,4 +1,4 @@
-import { generateObject, models } from '@mycortex/ai-core';
+import { embedText, generateObject, generateText, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
 import type { CoachEpisodeRow, CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
 import { z } from 'zod';
@@ -424,6 +424,97 @@ export async function generateEpisode(
     .single();
   if (upErr) throw new Error(`episode_upsert_failed:${upErr.message}`);
   return row as CoachEpisode;
+}
+
+// =========================================================================
+// Cerebro conversacional: "hablá con tu coach/diario" (memoria + contexto).
+// =========================================================================
+
+export type ChatMessage = { role: 'user' | 'assistant'; content: string };
+
+const CHAT_SYSTEM_PROMPT = `Sos CORTEX, el coach personal del usuario, conversando con él/ella. Tenés acceso a su segundo cerebro y a su contexto de coaching (perfil, diario, sugerencias, tareas). Hablás como un mentor cercano: directo, cálido, accionable. Español rioplatense ("vos").
+
+Reglas:
+- Usá el CONTEXTO de abajo para responder con conocimiento de su vida y continuidad ("la semana pasada...", "tu meta de..."). No repitas el contexto de corrido; usalo.
+- Si te preguntan algo que el contexto no cubre, decilo con honestidad; no inventes.
+- Sé conciso (2-6 frases salvo que pidan más). Terminá con un próximo paso concreto cuando tenga sentido.`;
+
+/** Contexto de coaching para la conversación (perfil + diario + sugerencias + tareas + RAG). */
+async function buildChatContext(db: Db, workspaceId: string, message: string): Promise<string> {
+  const profileBlock = await buildProfileBlock(db, workspaceId);
+
+  const { data: ep } = await db
+    .from('coach_episodes')
+    .select('label, narrative, mood, progress')
+    .eq('workspace_id', workspaceId)
+    .order('period_start', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const { data: sugg } = await db
+    .from('coach_suggestions')
+    .select('title, action, domain')
+    .eq('workspace_id', workspaceId)
+    .eq('status', 'pending')
+    .limit(8);
+
+  const { data: tasks } = await db
+    .from('tasks')
+    .select('title, status, priority')
+    .eq('workspace_id', workspaceId)
+    .neq('status', 'done')
+    .limit(15);
+
+  let ragBlock = '';
+  try {
+    const emb = await embedText(message);
+    const { data: matches } = await db.rpc('match_nodes_hybrid', {
+      query_embedding: emb,
+      query_text: message,
+      query_workspace_id: workspaceId,
+      match_count: 6,
+      match_threshold: 0.25,
+    });
+    const rows = (matches ?? []) as Array<{ title: string | null; content: string }>;
+    if (rows.length > 0) {
+      ragBlock =
+        '\nDe tu segundo cerebro (relacionado a la pregunta):\n' +
+        rows.map((m, i) => `[N${i + 1}] ${m.title ?? ''}: ${m.content.slice(0, 280).replace(/\s+/g, ' ')}`).join('\n');
+    }
+  } catch {
+    /* RAG es opcional */
+  }
+
+  const parts = ['CONTEXTO:'];
+  if (profileBlock) parts.push(profileBlock.trim());
+  if (ep) parts.push(`Último episodio (${ep.label}): ${ep.narrative.slice(0, 400)}${ep.mood ? ` | Ánimo: ${ep.mood}` : ''}${ep.progress ? ` | Progreso: ${ep.progress}` : ''}`);
+  if (sugg?.length) parts.push(`Sugerencias pendientes:\n${sugg.map((s) => `- [${s.domain}] ${s.title}: ${s.action}`).join('\n')}`);
+  if (tasks?.length) parts.push(`Tareas abiertas:\n${tasks.map((t) => `- (${t.priority}/${t.status}) ${t.title}`).join('\n')}`);
+  if (ragBlock) parts.push(ragBlock);
+  return parts.join('\n\n');
+}
+
+/**
+ * Una vuelta de conversación con el coach. Recibe el mensaje + el historial y
+ * devuelve la respuesta del coach, con todo el contexto de coaching inyectado.
+ * La persistencia de los mensajes la maneja el caller (la api).
+ */
+export async function coachChat(
+  db: Db,
+  workspaceId: string,
+  message: string,
+  history: ChatMessage[] = [],
+): Promise<string> {
+  const context = await buildChatContext(db, workspaceId, message);
+  // Limitamos el historial para acotar tokens (últimos 12 turnos).
+  const recent = history.slice(-12);
+  const { text } = await generateText({
+    model: models.reasoner,
+    system: `${CHAT_SYSTEM_PROMPT}\n\n${context}`,
+    messages: [...recent, { role: 'user', content: message }],
+    maxTokens: 1000,
+  });
+  return text.trim();
 }
 
 /** Bloque de perfil para inyectar en el prompt del coach (vacío si no hay). */

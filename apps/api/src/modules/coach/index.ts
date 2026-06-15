@@ -1,10 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import {
+  coachChat,
   deriveUserProfile,
   generateCoachSuggestions,
   generateEpisode,
   persistCoachGeneration,
+  type ChatMessage,
 } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
@@ -223,6 +225,68 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       } catch (err) {
         req.log.error({ err: String(err) }, 'coach_episode_failed');
         return reply.code(502).send({ error: 'episode_failed' });
+      }
+    },
+  );
+
+  /** Historial del chat con el coach (memoria de conversación). */
+  server.get('/chat', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const q = z
+      .object({ limit: z.coerce.number().int().min(1).max(200).default(50) })
+      .safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    const { data, error } = await auth.db
+      .from('coach_messages')
+      .select('id, role, content, created_at')
+      .eq('workspace_id', auth.workspaceId)
+      .order('created_at', { ascending: true })
+      .limit(q.data.limit);
+    if (error) return reply.code(500).send({ error: 'db_error' });
+    return reply.code(200).send({ messages: data ?? [] });
+  });
+
+  /**
+   * Una vuelta de conversación: persiste tu mensaje, responde el coach con
+   * memoria + contexto, persiste la respuesta. Caro (Claude + RAG): 12/min.
+   */
+  server.post(
+    '/chat',
+    { config: { rateLimit: { max: 12, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const auth = await requireAuth(req, reply);
+      if (!auth) return;
+      const env = getEnv();
+      if (!env.ANTHROPIC_API_KEY) return reply.code(503).send({ error: 'anthropic_required_for_coach' });
+
+      const body = z.object({ message: z.string().trim().min(1).max(2000) }).safeParse(req.body);
+      if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
+
+      // Historial previo para la memoria de conversación.
+      const { data: hist } = await auth.db
+        .from('coach_messages')
+        .select('role, content')
+        .eq('workspace_id', auth.workspaceId)
+        .order('created_at', { ascending: true })
+        .limit(24);
+      const history: ChatMessage[] = (hist ?? []).map((m) => ({
+        role: m.role as ChatMessage['role'],
+        content: m.content,
+      }));
+
+      try {
+        const replyText = await coachChat(auth.db, auth.workspaceId, body.data.message, history);
+        // Persistimos ambos turnos (best-effort en el insert).
+        await auth.db.from('coach_messages').insert([
+          { workspace_id: auth.workspaceId, user_id: auth.userId, role: 'user', content: body.data.message },
+          { workspace_id: auth.workspaceId, user_id: auth.userId, role: 'assistant', content: replyText },
+        ]);
+        return reply.code(200).send({ reply: replyText });
+      } catch (err) {
+        req.log.error({ err: String(err) }, 'coach_chat_failed');
+        return reply.code(502).send({ error: 'chat_failed' });
       }
     },
   );

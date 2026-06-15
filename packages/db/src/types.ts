@@ -621,6 +621,72 @@ export type CoachEpisodeInsert = {
 
 export type CoachEpisodeUpdate = Partial<Omit<CoachEpisodeInsert, 'workspace_id' | 'user_id'>>;
 
+// Cerebro conversacional: mensajes de chat (memoria de conversación).
+export type CoachMessageRole = 'user' | 'assistant';
+
+export type CoachMessageRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  role: CoachMessageRole;
+  content: string;
+  created_at: string;
+};
+
+export type CoachMessageInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  role: CoachMessageRole;
+  content: string;
+};
+
+// Grafo de entidades.
+export type EntityType = 'persona' | 'proyecto' | 'organizacion' | 'lugar' | 'tema' | 'otro';
+
+export type EntityRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  type: EntityType;
+  aliases: string[];
+  summary: string;
+  mention_count: number;
+  last_seen: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EntityInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  name: string;
+  type: EntityType;
+  aliases?: string[];
+  summary?: string;
+  mention_count?: number;
+  last_seen?: string | null;
+};
+
+export type EntityUpdate = Partial<Omit<EntityInsert, 'workspace_id' | 'user_id'>>;
+
+export type EntityMentionRow = {
+  id: string;
+  workspace_id: string;
+  entity_id: string;
+  node_id: string;
+  created_at: string;
+};
+
+export type EntityMentionInsert = {
+  id?: string;
+  workspace_id: string;
+  entity_id: string;
+  node_id: string;
+};
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -714,6 +780,24 @@ export type Database = {
         Row: CoachEpisodeRow;
         Insert: CoachEpisodeInsert;
         Update: CoachEpisodeUpdate;
+        Relationships: [];
+      };
+      coach_messages: {
+        Row: CoachMessageRow;
+        Insert: CoachMessageInsert;
+        Update: Partial<CoachMessageInsert>;
+        Relationships: [];
+      };
+      entities: {
+        Row: EntityRow;
+        Insert: EntityInsert;
+        Update: EntityUpdate;
+        Relationships: [];
+      };
+      entity_mentions: {
+        Row: EntityMentionRow;
+        Insert: EntityMentionInsert;
+        Update: Partial<EntityMentionInsert>;
         Relationships: [];
       };
       telegram_links: {

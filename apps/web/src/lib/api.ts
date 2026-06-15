@@ -546,6 +546,86 @@ export async function generateEpisode(): Promise<CoachEpisode> {
   return json.episode;
 }
 
+// ---- Coach: chat conversacional -----------------------------------------
+
+export type ChatMessage = {
+  id?: string;
+  role: 'user' | 'assistant';
+  content: string;
+  created_at?: string;
+};
+
+export async function getChatHistory(limit = 50): Promise<ChatMessage[]> {
+  const res = await fetch(`${API_URL}/coach/chat?limit=${limit}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`chat_history ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { messages: ChatMessage[] };
+  return json.messages;
+}
+
+export async function sendChat(message: string): Promise<string> {
+  const res = await fetch(`${API_URL}/coach/chat`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) throw new Error(`chat ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { reply: string };
+  return json.reply;
+}
+
+// ---- Grafo de entidades -------------------------------------------------
+
+export type EntityType = 'persona' | 'proyecto' | 'organizacion' | 'lugar' | 'tema' | 'otro';
+
+export type Entity = {
+  id: string;
+  name: string;
+  type: EntityType;
+  summary: string;
+  mention_count: number;
+  last_seen: string | null;
+};
+
+export type EntityNode = {
+  id: string;
+  title: string | null;
+  content: string;
+  source: string;
+  external_source: string | null;
+  created_at: string;
+};
+
+export type EntityDetail = {
+  entity: Entity & { aliases: string[] };
+  nodes: EntityNode[];
+  related: Array<{ id: string; name: string; type: EntityType; count: number }>;
+};
+
+export async function listEntities(type?: EntityType): Promise<Entity[]> {
+  const url = new URL(`${API_URL}/entities`);
+  if (type) url.searchParams.set('type', type);
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`entities ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { entities: Entity[] };
+  return json.entities;
+}
+
+export async function getEntity(id: string): Promise<EntityDetail> {
+  const res = await fetch(`${API_URL}/entities/${id}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`entity ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+export async function extractEntities(lookbackDays?: number): Promise<{ entities: number; mentions: number }> {
+  const res = await fetch(`${API_URL}/entities/extract`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+  });
+  if (!res.ok) throw new Error(`entities_extract ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
 // ---- Agenda -------------------------------------------------------------
 
 export type AgendaEvent = {
