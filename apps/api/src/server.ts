@@ -6,6 +6,7 @@ import { Sentry } from './lib/sentry.js';
 import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
 import { cortexModule } from './modules/cortex/index.js';
+import { coachModule } from './modules/coach/index.js';
 import { askModule } from './modules/ask/index.js';
 import { workspacesModule } from './modules/workspaces/index.js';
 import { integrationsModule } from './modules/integrations/index.js';
@@ -72,9 +73,10 @@ export async function buildServer(): Promise<FastifyInstance> {
   // Sentry error handler — captura cualquier error que llegue al boundary
   // de Fastify (incluye errores no-manejados de handlers). Pre-filtramos
   // 4xx en beforeSend() de sentry.ts para no enviarlos.
-  server.setErrorHandler((err, request, reply) => {
-    // Solo capturamos errores 5xx o sin statusCode (uncaught).
-    const code = err.statusCode ?? 500;
+  server.setErrorHandler((err: unknown, request, reply) => {
+    // Normalize: handler de Fastify recibe `unknown` en strict mode.
+    const e = err as { statusCode?: number; name?: string; message?: string };
+    const code = e.statusCode ?? 500;
     if (code >= 500) {
       Sentry.captureException(err, {
         contexts: {
@@ -88,14 +90,15 @@ export async function buildServer(): Promise<FastifyInstance> {
     }
     request.log.error({ err, statusCode: code }, 'request_error');
     void reply.code(code).send({
-      error: err.name || 'InternalError',
-      message: code >= 500 ? 'Algo se rompió de nuestro lado. Ya lo reportamos.' : err.message,
+      error: e.name ?? 'InternalError',
+      message: code >= 500 ? 'Algo se rompió de nuestro lado. Ya lo reportamos.' : (e.message ?? 'Error'),
     });
   });
 
   await server.register(ingestaModule, { prefix: '/ingesta' });
   await server.register(accionModule, { prefix: '/accion' });
   await server.register(cortexModule, { prefix: '/cortex' });
+  await server.register(coachModule, { prefix: '/coach' });
   await server.register(askModule, { prefix: '/ask' });
   await server.register(workspacesModule, { prefix: '/workspaces' });
   await server.register(integrationsModule, { prefix: '/integrations' });

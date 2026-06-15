@@ -379,6 +379,63 @@ export async function listDigests(
   return json.digests;
 }
 
+// ---- Coach (sugerencias de crecimiento personal) ------------------------
+
+export type GrowthDomain =
+  | 'salud'
+  | 'ejercicio'
+  | 'proyectos'
+  | 'productividad'
+  | 'aprendizaje'
+  | 'finanzas'
+  | 'relaciones'
+  | 'bienestar'
+  | 'otro';
+
+export type CoachSuggestion = {
+  domain: GrowthDomain;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: 'hoy' | 'esta-semana' | 'este-mes';
+  priority: 'alta' | 'media' | 'baja';
+  sourceNodeIds: string[];
+};
+
+export type CoachResult = {
+  summary: string;
+  focus: string;
+  suggestions: CoachSuggestion[];
+};
+
+export type CoachCitedNode = { title: string | null; origin: string; snippet: string };
+
+export type CoachGeneration = {
+  result: CoachResult;
+  meta: {
+    nodesAnalyzed: number;
+    lookbackDays: number;
+    generatedAt: string;
+    droppedCitations: number;
+  };
+  citedNodes: Record<string, CoachCitedNode>;
+};
+
+/**
+ * Pide al coach un análisis de crecimiento personal sobre el material del
+ * workspace. Es una llamada cara (razonamiento Claude sobre el corpus), así
+ * que el FE la dispara on-demand, no en cada render.
+ */
+export async function getCoachSuggestions(lookbackDays?: number): Promise<CoachGeneration> {
+  const res = await fetch(`${API_URL}/coach/suggestions`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+  });
+  if (!res.ok) throw new Error(`coach ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
 // ---- Workspaces ---------------------------------------------------------
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
