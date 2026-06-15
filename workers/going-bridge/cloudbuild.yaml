@@ -46,21 +46,21 @@ steps:
     args:
       - -c
       - |
-        FLAGS="--image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
-          --region=${_REGION} --task-timeout=900s --memory=1Gi --cpu=1 --max-retries=1 \
-          --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
-          --set-env-vars=SUPABASE_URL=${_SUPABASE_URL} \
-          --set-secrets=SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest"
         if gcloud run jobs describe ${_JOB} --region=${_REGION} --project=$PROJECT_ID >/dev/null 2>&1; then
-          gcloud run jobs update ${_JOB} $FLAGS
+          gcloud run jobs update ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
+            --region=${_REGION} --task-timeout=900s --memory=1Gi --cpu=1 --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="SUPABASE_URL=${_SUPABASE_URL}" \
+            --set-secrets="SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest"
         else
-          gcloud run jobs create ${_JOB} $FLAGS
+          gcloud run jobs create ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
+            --region=${_REGION} --task-timeout=900s --memory=1Gi --cpu=1 --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="SUPABASE_URL=${_SUPABASE_URL}" \
+            --set-secrets="SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest"
         fi
-        # Nota: BRIDGE_WORKSPACE_ID, BRIDGE_USER_ID, GOING_GITHUB_REPO y el secret
-        # GITHUB_TOKEN se setean a mano (config por instalación), p.ej.:
-        #   gcloud run jobs update ${_JOB} --region=${_REGION} \
-        #     --update-env-vars=BRIDGE_WORKSPACE_ID=...,BRIDGE_USER_ID=...,GOING_GITHUB_REPO=owner/repo \
-        #     --update-secrets=GITHUB_TOKEN=mycortex-github-token:latest
 
 images:
   - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
