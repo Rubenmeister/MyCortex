@@ -587,6 +587,40 @@ export type CoachProfileInsert = {
 
 export type CoachProfileUpdate = Partial<Omit<CoachProfileInsert, 'workspace_id' | 'user_id'>>;
 
+// Diario / memoria episódica: un episodio por período.
+export type CoachEpisodeRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  period_start: string;
+  period_end: string;
+  label: string;
+  narrative: string;
+  themes: string[];
+  mood: string;
+  progress: string;
+  loose_threads: string[];
+  nodes_analyzed: number;
+  created_at: string;
+};
+
+export type CoachEpisodeInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  period_start: string;
+  period_end: string;
+  label: string;
+  narrative: string;
+  themes?: string[];
+  mood?: string;
+  progress?: string;
+  loose_threads?: string[];
+  nodes_analyzed?: number;
+};
+
+export type CoachEpisodeUpdate = Partial<Omit<CoachEpisodeInsert, 'workspace_id' | 'user_id'>>;
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -674,6 +708,12 @@ export type Database = {
         Row: CoachProfileRow;
         Insert: CoachProfileInsert;
         Update: CoachProfileUpdate;
+        Relationships: [];
+      };
+      coach_episodes: {
+        Row: CoachEpisodeRow;
+        Insert: CoachEpisodeInsert;
+        Update: CoachEpisodeUpdate;
         Relationships: [];
       };
       telegram_links: {

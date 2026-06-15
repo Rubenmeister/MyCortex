@@ -10,6 +10,7 @@ import { getAlertsUnreadCount } from '../../lib/api';
 
 const TABS = [
   { href: '/app/coach', label: 'Coach', icon: '🎯' },
+  { href: '/app/diario', label: 'Diario', icon: '📓' },
   { href: '/app/agenda', label: 'Agenda', icon: '📅' },
   { href: '/app/tasks', label: 'Tareas', icon: '✅' },
   { href: '/app/capture', label: 'Capturar', icon: '✎' },

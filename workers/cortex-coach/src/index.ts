@@ -3,6 +3,7 @@ import { createDb, type Db } from '@mycortex/db';
 import {
   deriveUserProfile,
   generateCoachSuggestions,
+  generateEpisode,
   persistCoachGeneration,
 } from '@mycortex/cortex-engine';
 
@@ -75,7 +76,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const totals = { workspaces: 0, withSuggestions: 0, inserted: 0, nudged: 0, errors: 0 };
+  const totals = { workspaces: 0, withSuggestions: 0, inserted: 0, episodes: 0, nudged: 0, errors: 0 };
 
   for (const ws of workspaces) {
     totals.workspaces++;
@@ -86,6 +87,14 @@ async function main(): Promise<void> {
         await deriveUserProfile(db, ws.id, ws.owner_id, { lookbackDays: cfg.COACH_LOOKBACK_DAYS * 2 });
       } catch (err) {
         log('warn', 'profile_refresh_failed', { workspaceId: ws.id, error: String(err).slice(0, 160) });
+      }
+
+      // 1b. Episodio de diario de la última semana (memoria episódica). Best-effort.
+      try {
+        await generateEpisode(db, ws.id, ws.owner_id);
+        totals.episodes++;
+      } catch (err) {
+        log('warn', 'episode_failed', { workspaceId: ws.id, error: String(err).slice(0, 160) });
       }
 
       // 2. Generar + persistir el coaching.

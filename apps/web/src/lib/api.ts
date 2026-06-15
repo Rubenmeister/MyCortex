@@ -510,6 +510,42 @@ export async function refreshCoachProfile(): Promise<CoachProfile> {
   return json.profile;
 }
 
+// ---- Coach: diario / memoria episódica ----------------------------------
+
+export type CoachEpisode = {
+  id: string;
+  period_start: string;
+  period_end: string;
+  label: string;
+  narrative: string;
+  themes: string[];
+  mood: string;
+  progress: string;
+  loose_threads: string[];
+  nodes_analyzed: number;
+  created_at: string;
+};
+
+export async function listEpisodes(limit = 12): Promise<CoachEpisode[]> {
+  const res = await fetch(`${API_URL}/coach/episodes?limit=${limit}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`episodes ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { episodes: CoachEpisode[] };
+  return json.episodes;
+}
+
+export async function generateEpisode(): Promise<CoachEpisode> {
+  const res = await fetch(`${API_URL}/coach/episodes/generate`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`episode ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { episode: CoachEpisode };
+  return json.episode;
+}
+
 // ---- Agenda -------------------------------------------------------------
 
 export type AgendaEvent = {

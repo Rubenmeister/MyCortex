@@ -1,6 +1,6 @@
 import { generateObject, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
-import type { CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
+import type { CoachEpisodeRow, CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
 import { z } from 'zod';
 
 /**
@@ -320,6 +320,110 @@ export async function deriveUserProfile(
     .single();
   if (upErr) throw new Error(`profile_upsert_failed:${upErr.message}`);
   return row as CoachProfile;
+}
+
+// =========================================================================
+// Diario / memoria episódica navegable: un episodio por período.
+// =========================================================================
+
+export type CoachEpisode = CoachEpisodeRow;
+
+const EpisodeSchema = z.object({
+  narrative: z.string(),
+  themes: z.array(z.string()),
+  mood: z.string(),
+  progress: z.string(),
+  looseThreads: z.array(z.string()),
+});
+
+const EPISODE_SYSTEM_PROMPT = `Sos CORTEX, escribiendo el DIARIO del usuario: un episodio que resume un período (una semana) de su vida a partir de su material (notas, mails, docs, eventos). Devolvé JSON con:
+
+- narrative: 1-2 párrafos en markdown contando qué pasó en el período, en segunda persona ("esta semana...", "vos"). Concreto, fundado en el material.
+- themes: los temas/ejes que dominaron el período (lista corta).
+- mood: lectura de ánimo/energía del período, con cuidado y empatía (sin diagnosticar). Si no hay señal, decilo.
+- progress: avance respecto de las metas del usuario (mirá el PERFIL si está). Qué movió la aguja, qué no.
+- looseThreads: hilos sueltos — cosas que quedaron abiertas, sin respuesta, o que el usuario empezó y no cerró.
+
+REGLAS: fundá todo en el material; NO inventes. Si el período tuvo poco material, hacé un episodio breve y honesto. Español rioplatense. Devolvé SIEMPRE JSON válido.`;
+
+function formatPeriodLabel(startIso: string, endIso: string): string {
+  const s = new Date(startIso);
+  const e = new Date(endIso);
+  const months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+  const sameMonth = s.getUTCMonth() === e.getUTCMonth();
+  const left = `${s.getUTCDate()}${sameMonth ? '' : ' ' + months[s.getUTCMonth()]}`;
+  const right = `${e.getUTCDate()} ${months[e.getUTCMonth()]}`;
+  return `Semana del ${left}–${right}`;
+}
+
+/**
+ * Genera (o regenera) el episodio de diario de un período y lo persiste en
+ * coach_episodes (upsert por workspace+period_start). Usa el perfil para dar
+ * continuidad y medir progreso contra metas.
+ */
+export async function generateEpisode(
+  db: Db,
+  workspaceId: string,
+  userId: string,
+  opts: { periodStart?: string; periodEnd?: string } = {},
+): Promise<CoachEpisode> {
+  const periodEnd = opts.periodEnd ?? new Date().toISOString();
+  const periodStart =
+    opts.periodStart ?? new Date(new Date(periodEnd).getTime() - 7 * 24 * 3600_000).toISOString();
+  const label = formatPeriodLabel(periodStart, periodEnd);
+
+  const { data, error } = await db
+    .from('nodes')
+    .select('id, title, content, source, category, created_at, external_source, external_metadata')
+    .eq('workspace_id', workspaceId)
+    .gte('created_at', periodStart)
+    .lte('created_at', periodEnd)
+    .order('created_at', { ascending: false })
+    .limit(120);
+  if (error) throw new Error(`episode_fetch_failed:${error.message}`);
+  const nodes = (data ?? []) as CoachNode[];
+
+  let derived = { narrative: '', themes: [] as string[], mood: '', progress: '', looseThreads: [] as string[] };
+  if (nodes.length === 0) {
+    derived.narrative = 'Un período tranquilo: no registré material nuevo en tu segundo cerebro.';
+  } else {
+    const profileBlock = await buildProfileBlock(db, workspaceId);
+    const prompt =
+      profileBlock +
+      `Escribí el episodio de diario para "${label}" a partir de estos ${nodes.length} ítems del período.\n\n` +
+      nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
+    const { object } = await generateObject({
+      model: models.reasoner,
+      schema: EpisodeSchema,
+      system: EPISODE_SYSTEM_PROMPT,
+      prompt,
+      maxTokens: 2500,
+    });
+    derived = object;
+  }
+
+  const { data: row, error: upErr } = await db
+    .from('coach_episodes')
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        user_id: userId,
+        period_start: periodStart,
+        period_end: periodEnd,
+        label,
+        narrative: derived.narrative,
+        themes: derived.themes,
+        mood: derived.mood,
+        progress: derived.progress,
+        loose_threads: derived.looseThreads,
+        nodes_analyzed: nodes.length,
+      },
+      { onConflict: 'workspace_id,period_start' },
+    )
+    .select('*')
+    .single();
+  if (upErr) throw new Error(`episode_upsert_failed:${upErr.message}`);
+  return row as CoachEpisode;
 }
 
 /** Bloque de perfil para inyectar en el prompt del coach (vacío si no hay). */

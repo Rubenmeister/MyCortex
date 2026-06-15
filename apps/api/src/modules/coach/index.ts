@@ -1,6 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { deriveUserProfile, generateCoachSuggestions, persistCoachGeneration } from '@mycortex/cortex-engine';
+import {
+  deriveUserProfile,
+  generateCoachSuggestions,
+  generateEpisode,
+  persistCoachGeneration,
+} from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
 
@@ -165,6 +170,59 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       } catch (err) {
         req.log.error({ err: String(err) }, 'coach_profile_refresh_failed');
         return reply.code(502).send({ error: 'profile_refresh_failed' });
+      }
+    },
+  );
+
+  /** Diario: episodios persistidos, del más reciente al más viejo. */
+  server.get('/episodes', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const q = z
+      .object({ limit: z.coerce.number().int().min(1).max(52).default(12) })
+      .safeParse(req.query);
+    if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
+
+    const { data, error } = await auth.db
+      .from('coach_episodes')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      .order('period_start', { ascending: false })
+      .limit(q.data.limit);
+    if (error) return reply.code(500).send({ error: 'db_error' });
+    return reply.code(200).send({ episodes: data ?? [] });
+  });
+
+  /**
+   * Genera el episodio de un período (default: últimos 7 días). Caro (Claude):
+   * rate-limit 4/min.
+   */
+  server.post(
+    '/episodes/generate',
+    { config: { rateLimit: { max: 4, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const auth = await requireAuth(req, reply);
+      if (!auth) return;
+      const env = getEnv();
+      if (!env.ANTHROPIC_API_KEY) return reply.code(503).send({ error: 'anthropic_required_for_coach' });
+
+      const body = z
+        .object({
+          periodStart: z.string().datetime().optional(),
+          periodEnd: z.string().datetime().optional(),
+        })
+        .safeParse(req.body ?? {});
+      if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
+
+      try {
+        const episode = await generateEpisode(auth.db, auth.workspaceId, auth.userId, {
+          periodStart: body.data.periodStart,
+          periodEnd: body.data.periodEnd,
+        });
+        return reply.code(200).send({ episode });
+      } catch (err) {
+        req.log.error({ err: String(err) }, 'coach_episode_failed');
+        return reply.code(502).send({ error: 'episode_failed' });
       }
     },
   );
