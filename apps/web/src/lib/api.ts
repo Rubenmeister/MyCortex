@@ -479,6 +479,37 @@ export async function actOnCoachSuggestion(
   if (!res.ok) throw new Error(`coach_action ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
 
+// ---- Coach: perfil que te conoce ----------------------------------------
+
+export type CoachProfile = {
+  summary: string;
+  focus_areas: string[];
+  goals: string[];
+  routines: string;
+  trends: string;
+  wellbeing: string;
+  nodes_analyzed: number;
+  updated_at: string;
+};
+
+export async function getCoachProfile(): Promise<CoachProfile | null> {
+  const res = await fetch(`${API_URL}/coach/profile`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`coach_profile ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { profile: CoachProfile | null };
+  return json.profile;
+}
+
+export async function refreshCoachProfile(): Promise<CoachProfile> {
+  const res = await fetch(`${API_URL}/coach/profile/refresh`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`coach_profile_refresh ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { profile: CoachProfile };
+  return json.profile;
+}
+
 // ---- Agenda -------------------------------------------------------------
 
 export type AgendaEvent = {

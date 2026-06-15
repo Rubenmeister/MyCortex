@@ -1,6 +1,6 @@
 import { generateObject, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
-import type { CoachSuggestionInsert } from '@mycortex/db/types';
+import type { CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
 import { z } from 'zod';
 
 /**
@@ -139,7 +139,12 @@ export async function generateCoachSuggestions(
     };
   }
 
+  // "El coach que te conoce": si hay un perfil aprendido, lo inyectamos para
+  // personalizar y dar continuidad (no re-derivar tu vida en cada corrida).
+  const profileBlock = await buildProfileBlock(db, workspaceId);
+
   const prompt =
+    profileBlock +
     `Analizá el siguiente material del usuario (${nodes.length} ítems de los últimos ${lookbackDays} días) ` +
     `y generá su coaching de crecimiento personal. Citá en sourceNodeIds los ítems que uses.\n\n` +
     nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
@@ -225,4 +230,112 @@ export async function persistCoachGeneration(
   if (insErr) throw new Error(`coach_suggestions_insert_failed:${insErr.message}`);
 
   return { runId: run.id, inserted: rows.length };
+}
+
+// =========================================================================
+// "El coach que te conoce de verdad": perfil del usuario aprendido del corpus.
+// =========================================================================
+
+export type CoachProfile = CoachProfileRow;
+
+const ProfileSchema = z.object({
+  summary: z.string(),
+  focusAreas: z.array(z.string()),
+  goals: z.array(z.string()),
+  routines: z.string(),
+  trends: z.string(),
+  wellbeing: z.string(),
+});
+
+const PROFILE_SYSTEM_PROMPT = `Sos CORTEX. A partir de TODO el material del usuario (notas, mails, docs, eventos), construí un PERFIL para conocerlo de verdad y poder coachearlo con continuidad. Devolvé JSON con:
+
+- summary: quién es el usuario, en 2-4 frases (rol, en qué anda, qué le importa).
+- focusAreas: los ejes/temas en los que está enfocado AHORA (lista corta).
+- goals: metas explícitas o claramente inferidas (lista; vacío si no hay señal).
+- routines: hábitos/rutinas detectados (1-3 frases; vacío si no hay).
+- trends: MEMORIA EPISÓDICA — cómo cambió en el tiempo (qué empezó, qué dejó, qué se repite, qué viene posponiendo). Mirá las fechas.
+- wellbeing: lectura de bienestar/carga con cuidado y empatía (señales de sobrecarga, foco disperso, energía). Si no hay señal clara, decilo; NO diagnostiques.
+
+REGLAS: fundá todo en el material, NO inventes. Si el material es escaso, devolvé campos breves u vacíos con honestidad. Hablá en español rioplatense ("vos"). Devolvé SIEMPRE JSON válido.`;
+
+/**
+ * Deriva (o actualiza) el perfil del usuario analizando una ventana amplia del
+ * corpus, y lo persiste en coach_profile. Es lo que hace que el coach "te
+ * conozca": el perfil después se inyecta en cada generación de sugerencias.
+ */
+export async function deriveUserProfile(
+  db: Db,
+  workspaceId: string,
+  userId: string,
+  opts: { lookbackDays?: number; maxNodes?: number } = {},
+): Promise<CoachProfile> {
+  const lookbackDays = opts.lookbackDays ?? 90;
+  const maxNodes = opts.maxNodes ?? 120;
+  const since = new Date(Date.now() - lookbackDays * 24 * 3600_000).toISOString();
+
+  const { data, error } = await db
+    .from('nodes')
+    .select('id, title, content, source, category, created_at, external_source, external_metadata')
+    .eq('workspace_id', workspaceId)
+    .gte('created_at', since)
+    .order('created_at', { ascending: false })
+    .limit(maxNodes);
+  if (error) throw new Error(`profile_fetch_failed:${error.message}`);
+  const nodes = (data ?? []) as CoachNode[];
+
+  let derived = { summary: '', focusAreas: [] as string[], goals: [] as string[], routines: '', trends: '', wellbeing: '' };
+  if (nodes.length >= MIN_NODES_FOR_COACHING) {
+    const prompt =
+      `Construí el perfil del usuario a partir de estos ${nodes.length} ítems de los últimos ${lookbackDays} días ` +
+      `(prestá atención a las fechas para las tendencias).\n\n` +
+      nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
+    const { object } = await generateObject({
+      model: models.reasoner,
+      schema: ProfileSchema,
+      system: PROFILE_SYSTEM_PROMPT,
+      prompt,
+      maxTokens: 2000,
+    });
+    derived = object;
+  }
+
+  const { data: row, error: upErr } = await db
+    .from('coach_profile')
+    .upsert(
+      {
+        workspace_id: workspaceId,
+        user_id: userId,
+        summary: derived.summary,
+        focus_areas: derived.focusAreas,
+        goals: derived.goals,
+        routines: derived.routines,
+        trends: derived.trends,
+        wellbeing: derived.wellbeing,
+        nodes_analyzed: nodes.length,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'workspace_id' },
+    )
+    .select('*')
+    .single();
+  if (upErr) throw new Error(`profile_upsert_failed:${upErr.message}`);
+  return row as CoachProfile;
+}
+
+/** Bloque de perfil para inyectar en el prompt del coach (vacío si no hay). */
+async function buildProfileBlock(db: Db, workspaceId: string): Promise<string> {
+  const { data } = await db
+    .from('coach_profile')
+    .select('*')
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
+  const p = data as CoachProfile | null;
+  if (!p || !p.summary) return '';
+  const parts = [`PERFIL DEL USUARIO (lo que ya sabés de él/ella — usalo para personalizar y dar continuidad):`, p.summary];
+  if (p.focus_areas?.length) parts.push(`Enfoque actual: ${p.focus_areas.join(', ')}`);
+  if (p.goals?.length) parts.push(`Metas: ${p.goals.join(', ')}`);
+  if (p.routines) parts.push(`Rutinas: ${p.routines}`);
+  if (p.trends) parts.push(`Tendencias en el tiempo: ${p.trends}`);
+  if (p.wellbeing) parts.push(`Bienestar: ${p.wellbeing}`);
+  return parts.join('\n') + '\n\n';
 }

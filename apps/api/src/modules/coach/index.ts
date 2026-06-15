@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { generateCoachSuggestions, persistCoachGeneration } from '@mycortex/cortex-engine';
+import { deriveUserProfile, generateCoachSuggestions, persistCoachGeneration } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
 
@@ -133,4 +133,39 @@ export const coachModule: FastifyPluginAsync = async (server) => {
     if (error) return reply.code(500).send({ error: 'db_error' });
     return reply.code(200).send({ ok: true });
   });
+
+  /** El perfil que el coach aprendió del usuario ("lo que sé de vos"). */
+  server.get('/profile', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const { data, error } = await auth.db
+      .from('coach_profile')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      .maybeSingle();
+    if (error) return reply.code(500).send({ error: 'db_error' });
+    return reply.code(200).send({ profile: data ?? null });
+  });
+
+  /**
+   * (Re)deriva el perfil analizando el corpus. Caro (Claude sobre hasta 120
+   * nodos): rate-limit 3/min.
+   */
+  server.post(
+    '/profile/refresh',
+    { config: { rateLimit: { max: 3, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const auth = await requireAuth(req, reply);
+      if (!auth) return;
+      const env = getEnv();
+      if (!env.ANTHROPIC_API_KEY) return reply.code(503).send({ error: 'anthropic_required_for_coach' });
+      try {
+        const profile = await deriveUserProfile(auth.db, auth.workspaceId, auth.userId);
+        return reply.code(200).send({ profile });
+      } catch (err) {
+        req.log.error({ err: String(err) }, 'coach_profile_refresh_failed');
+        return reply.code(502).send({ error: 'profile_refresh_failed' });
+      }
+    },
+  );
 };

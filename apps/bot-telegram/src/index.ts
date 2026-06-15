@@ -143,6 +143,7 @@ bot.start(async (ctx) => {
 bot.help((ctx) =>
   ctx.reply(
     'Mandame texto o audio. Comandos:\n' +
+      '/coach — tu coaching de crecimiento\n' +
       '/last — últimas notas\n' +
       '/cortex — run evolución\n' +
       '/whoami — qué cuenta tengo linkeada',
@@ -242,6 +243,32 @@ bot.command('cortex', async (ctx) => {
     const summary = await api.runCortex(id);
     await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
     await ctx.reply(formatCortexRun(summary), { parse_mode: 'Markdown' });
+  } catch (err) {
+    await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
+    await ctx.reply(`❌ ${String(err).slice(0, 200)}`);
+  }
+});
+
+bot.command('coach', async (ctx) => {
+  const id = await identityFor(ctx.chat.id);
+  if (!id) {
+    await ctx.reply(UNLINKED_HINT, { parse_mode: 'Markdown' });
+    return;
+  }
+  const wait = await ctx.reply('🎯 Pensando tu coaching...');
+  try {
+    const { result } = await api.coach(id);
+    const prio: Record<string, string> = { alta: '🔴', media: '🟡', baja: '🔵' };
+    const top = result.suggestions
+      .slice()
+      .sort((a, b) => (a.priority === 'alta' ? -1 : 1) - (b.priority === 'alta' ? -1 : 1))
+      .slice(0, 3)
+      .map((s) => `${prio[s.priority] ?? '•'} *${s.title}*\n${s.action}`)
+      .join('\n\n');
+    const msg =
+      `🎯 *Tu foco*\n${result.focus}\n\n` + (top ? `*Sugerencias:*\n${top}` : result.summary);
+    await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
   } catch (err) {
     await ctx.telegram.deleteMessage(ctx.chat.id, wait.message_id).catch(() => {});
     await ctx.reply(`❌ ${String(err).slice(0, 200)}`);

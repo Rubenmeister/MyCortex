@@ -34,6 +34,20 @@ export type RecentNode = {
   created_at: string;
 };
 
+export type CoachSuggestion = {
+  domain: string;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: 'hoy' | 'esta-semana' | 'este-mes';
+  priority: 'alta' | 'media' | 'baja';
+};
+
+export type CoachResponse = {
+  result: { summary: string; focus: string; suggestions: CoachSuggestion[] };
+  meta: { nodesAnalyzed: number };
+};
+
 /**
  * Identity context for a Telegram message: which MyCortex user owns it
  * and which workspace it should land in. Resolved either from a
@@ -97,5 +111,9 @@ export class ApiClient {
 
   recentNodes(id: BotIdentity, limit = 5): Promise<{ nodes: RecentNode[] }> {
     return this.get(`/cortex/nodes?limit=${limit}`, id);
+  }
+
+  coach(id: BotIdentity): Promise<CoachResponse> {
+    return this.post('/coach/suggestions', id);
   }
 }

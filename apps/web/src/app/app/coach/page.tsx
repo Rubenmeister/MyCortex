@@ -1,9 +1,12 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
+  getCoachProfile,
   getCoachSuggestions,
+  refreshCoachProfile,
   type CoachGeneration,
+  type CoachProfile,
   type CoachSuggestion,
   type GrowthDomain,
 } from '../../../lib/api';
@@ -45,6 +48,33 @@ export default function CoachPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookback, setLookback] = useState(45);
+  const [profile, setProfile] = useState<CoachProfile | null>(null);
+  const [profileBusy, setProfileBusy] = useState(false);
+
+  useEffect(() => {
+    if (!current) return;
+    let cancelled = false;
+    getCoachProfile()
+      .then((p) => {
+        if (!cancelled) setProfile(p);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [current]);
+
+  const refreshProfile = useCallback(async () => {
+    setProfileBusy(true);
+    setError(null);
+    try {
+      setProfile(await refreshCoachProfile());
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setProfileBusy(false);
+    }
+  }, []);
 
   const generate = useCallback(
     async (days: number) => {
@@ -77,6 +107,34 @@ export default function CoachPage() {
           </p>
         </div>
       </header>
+
+      <section className="profile">
+        <div className="profile-head">
+          <span className="profile-tag">🧠 Lo que sé de vos</span>
+          <button type="button" className="lb" disabled={profileBusy || !current} onClick={refreshProfile}>
+            {profileBusy ? 'Aprendiendo…' : profile && profile.summary ? 'Actualizar' : 'Construir perfil'}
+          </button>
+        </div>
+        {profile && profile.summary ? (
+          <div className="profile-body">
+            <p className="profile-summary">{profile.summary}</p>
+            {profile.focus_areas?.length > 0 && (
+              <div className="chips">
+                {profile.focus_areas.map((f, i) => (
+                  <span key={i} className="chip">{f}</span>
+                ))}
+              </div>
+            )}
+            {profile.trends && <div className="profile-row"><b>Tendencias:</b> {profile.trends}</div>}
+            {profile.wellbeing && <div className="profile-row"><b>Bienestar:</b> {profile.wellbeing}</div>}
+          </div>
+        ) : (
+          <p className="profile-empty">
+            Todavía no aprendí tu perfil. Apretá «Construir perfil» y voy a leer tu material para
+            conocerte: en qué andás, tus metas, rutinas y tendencias en el tiempo.
+          </p>
+        )}
+      </section>
 
       <div className="controls">
         <div className="lookback">
@@ -202,6 +260,15 @@ export default function CoachPage() {
         .head { margin-bottom: 20px; }
         h1 { margin: 0 0 6px; font-size: 24px; }
         .sub { color: #888; font-size: 14px; margin: 0; max-width: 600px; line-height: 1.5; }
+        .profile { background: #0e0e14; border: 1px solid #1a1a22; border-radius: 12px; padding: 16px 18px; margin-bottom: 20px; }
+        .profile-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 10px; }
+        .profile-tag { color: #c79bf2; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
+        .profile-summary { color: #ddd; font-size: 14px; line-height: 1.55; margin: 0 0 10px; }
+        .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+        .chip { color: #9bd0e0; font-size: 11px; background: #14141c; border: 1px solid #1f2a30; border-radius: 99px; padding: 2px 10px; }
+        .profile-row { color: #aaa; font-size: 13px; line-height: 1.5; margin-top: 4px; }
+        .profile-row b { color: #ccc; }
+        .profile-empty { color: #888; font-size: 13px; line-height: 1.5; margin: 0; }
         .controls { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 24px; }
         .lookback { display: flex; align-items: center; gap: 6px; }
         .lb-label { color: #777; font-size: 12px; margin-right: 4px; }

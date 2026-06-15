@@ -554,6 +554,39 @@ export type CoachSuggestionUpdate = Partial<
   Pick<CoachSuggestionRow, 'status' | 'snoozed_until' | 'read_at' | 'done_at' | 'dismissed_at'>
 >;
 
+// Perfil que el coach aprende del usuario (una fila por workspace).
+export type CoachProfileRow = {
+  workspace_id: string;
+  user_id: string;
+  summary: string;
+  focus_areas: string[];
+  goals: string[];
+  routines: string;
+  trends: string;
+  wellbeing: string;
+  tone_pref: string | null;
+  raw: Json;
+  nodes_analyzed: number;
+  updated_at: string;
+};
+
+export type CoachProfileInsert = {
+  workspace_id: string;
+  user_id: string;
+  summary?: string;
+  focus_areas?: string[];
+  goals?: string[];
+  routines?: string;
+  trends?: string;
+  wellbeing?: string;
+  tone_pref?: string | null;
+  raw?: Json;
+  nodes_analyzed?: number;
+  updated_at?: string;
+};
+
+export type CoachProfileUpdate = Partial<Omit<CoachProfileInsert, 'workspace_id' | 'user_id'>>;
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -635,6 +668,12 @@ export type Database = {
         Row: CoachSuggestionRow;
         Insert: CoachSuggestionInsert;
         Update: CoachSuggestionUpdate;
+        Relationships: [];
+      };
+      coach_profile: {
+        Row: CoachProfileRow;
+        Insert: CoachProfileInsert;
+        Update: CoachProfileUpdate;
         Relationships: [];
       };
       telegram_links: {
