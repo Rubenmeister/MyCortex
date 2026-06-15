@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.30.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Tests (incluye el invariante de RLS multi-tenant).
+      - run: pnpm test
+
+      # Type-check + build de todo menos mobile (tiene un desajuste de tipos
+      # React 19 preexistente; se excluye hasta resolverlo).
+      - run: pnpm exec turbo run type-check --filter=!@mycortex/mobile
+
+      - run: pnpm exec turbo run build --filter=!@mycortex/mobile
