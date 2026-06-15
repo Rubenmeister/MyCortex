@@ -452,6 +452,108 @@ export type DailyDigestInsert = {
   metadata?: Json;
 };
 
+// ---- Tasks -------------------------------------------------------------
+
+export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskPriority = 'alta' | 'media' | 'baja';
+export type TaskOrigin = 'manual' | 'coach' | 'extracted' | 'meeting';
+
+export type TaskRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  title: string;
+  detail: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+  origin: TaskOrigin;
+  source_node_id: string | null;
+  created_at: string;
+  updated_at: string;
+  completed_at: string | null;
+};
+
+export type TaskInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  title: string;
+  detail?: string | null;
+  status?: TaskStatus;
+  priority?: TaskPriority;
+  due_date?: string | null;
+  origin?: TaskOrigin;
+  source_node_id?: string | null;
+  completed_at?: string | null;
+};
+
+export type TaskUpdate = Partial<Omit<TaskInsert, 'workspace_id' | 'user_id'>>;
+
+// ---- Coach (proactive growth) ------------------------------------------
+
+export type CoachHorizon = 'hoy' | 'esta-semana' | 'este-mes';
+export type CoachPriority = 'alta' | 'media' | 'baja';
+export type CoachSuggestionStatus = 'pending' | 'done' | 'dismissed' | 'snoozed';
+
+export type CoachRunRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  focus: string;
+  summary: string;
+  nodes_analyzed: number;
+  created_at: string;
+};
+
+export type CoachRunInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  focus: string;
+  summary: string;
+  nodes_analyzed?: number;
+};
+
+export type CoachSuggestionRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  run_id: string | null;
+  domain: string;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: CoachHorizon;
+  priority: CoachPriority;
+  source_node_ids: string[];
+  status: CoachSuggestionStatus;
+  snoozed_until: string | null;
+  read_at: string | null;
+  done_at: string | null;
+  dismissed_at: string | null;
+  created_at: string;
+};
+
+export type CoachSuggestionInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  run_id?: string | null;
+  domain: string;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: CoachHorizon;
+  priority?: CoachPriority;
+  source_node_ids?: string[];
+  status?: CoachSuggestionStatus;
+};
+
+export type CoachSuggestionUpdate = Partial<
+  Pick<CoachSuggestionRow, 'status' | 'snoozed_until' | 'read_at' | 'done_at' | 'dismissed_at'>
+>;
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -515,6 +617,24 @@ export type Database = {
         Row: SmartAlertRow;
         Insert: SmartAlertInsert;
         Update: SmartAlertUpdate;
+        Relationships: [];
+      };
+      tasks: {
+        Row: TaskRow;
+        Insert: TaskInsert;
+        Update: TaskUpdate;
+        Relationships: [];
+      };
+      coach_runs: {
+        Row: CoachRunRow;
+        Insert: CoachRunInsert;
+        Update: Partial<CoachRunInsert>;
+        Relationships: [];
+      };
+      coach_suggestions: {
+        Row: CoachSuggestionRow;
+        Insert: CoachSuggestionInsert;
+        Update: CoachSuggestionUpdate;
         Relationships: [];
       };
       telegram_links: {

@@ -180,3 +180,4 @@ function buildSummary(
 }
 
 export type { FusionResult } from './prompts.js';
+export * from './coach.js';

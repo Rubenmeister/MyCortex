@@ -7,6 +7,8 @@ import { ingestaModule } from './modules/ingesta/index.js';
 import { accionModule } from './modules/accion/index.js';
 import { cortexModule } from './modules/cortex/index.js';
 import { coachModule } from './modules/coach/index.js';
+import { agendaModule } from './modules/agenda/index.js';
+import { tasksModule } from './modules/tasks/index.js';
 import { askModule } from './modules/ask/index.js';
 import { workspacesModule } from './modules/workspaces/index.js';
 import { integrationsModule } from './modules/integrations/index.js';
@@ -99,6 +101,8 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(accionModule, { prefix: '/accion' });
   await server.register(cortexModule, { prefix: '/cortex' });
   await server.register(coachModule, { prefix: '/coach' });
+  await server.register(agendaModule, { prefix: '/agenda' });
+  await server.register(tasksModule, { prefix: '/tasks' });
   await server.register(askModule, { prefix: '/ask' });
   await server.register(workspacesModule, { prefix: '/workspaces' });
   await server.register(integrationsModule, { prefix: '/integrations' });

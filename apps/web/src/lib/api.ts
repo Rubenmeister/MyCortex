@@ -436,6 +436,172 @@ export async function getCoachSuggestions(lookbackDays?: number): Promise<CoachG
   return res.json();
 }
 
+// ---- Coach: sugerencias persistidas + seguimiento -----------------------
+
+export type CoachSuggestionStatus = 'pending' | 'done' | 'dismissed' | 'snoozed';
+
+export type PersistedCoachSuggestion = {
+  id: string;
+  domain: GrowthDomain;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: 'hoy' | 'esta-semana' | 'este-mes';
+  priority: 'alta' | 'media' | 'baja';
+  source_node_ids: string[];
+  status: CoachSuggestionStatus;
+  snoozed_until: string | null;
+  created_at: string;
+};
+
+export async function listCoachSuggestions(
+  opts: { all?: boolean; limit?: number } = {},
+): Promise<PersistedCoachSuggestion[]> {
+  const url = new URL(`${API_URL}/coach/suggestions/list`);
+  if (opts.all) url.searchParams.set('all', '1');
+  if (opts.limit) url.searchParams.set('limit', String(opts.limit));
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`coach_list ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { suggestions: PersistedCoachSuggestion[] };
+  return json.suggestions;
+}
+
+export async function actOnCoachSuggestion(
+  id: string,
+  action: 'done' | 'dismiss' | 'snooze' | 'reopen',
+  days?: number,
+): Promise<void> {
+  const res = await fetch(`${API_URL}/coach/suggestions/${id}/action`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ action, ...(days ? { days } : {}) }),
+  });
+  if (!res.ok) throw new Error(`coach_action ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+// ---- Agenda -------------------------------------------------------------
+
+export type AgendaEvent = {
+  nodeId: string;
+  title: string;
+  start: string | null;
+  end: string | null;
+  location: string | null;
+  attendees: string[];
+  description: string;
+};
+
+export type PrepSource = {
+  id: string;
+  origin: 'note' | 'drive' | 'gmail';
+  title: string | null;
+  snippet: string;
+  similarity: number;
+};
+
+export type MeetingPrep = {
+  event: AgendaEvent;
+  brief: string;
+  sources: PrepSource[];
+};
+
+export async function getUpcomingEvents(days = 7): Promise<AgendaEvent[]> {
+  const res = await fetch(`${API_URL}/agenda/upcoming?days=${days}`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`agenda ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { events: AgendaEvent[] };
+  return json.events;
+}
+
+export async function getMeetingPrep(eventNodeId: string): Promise<MeetingPrep> {
+  const res = await fetch(`${API_URL}/agenda/prep`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ eventNodeId }),
+  });
+  if (!res.ok) throw new Error(`prep ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+// ---- Tasks --------------------------------------------------------------
+
+export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskPriority = 'alta' | 'media' | 'baja';
+
+export type Task = {
+  id: string;
+  title: string;
+  detail: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  due_date: string | null;
+  origin: 'manual' | 'coach' | 'extracted' | 'meeting';
+  source_node_id: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export async function listTasks(
+  opts: { status?: TaskStatus; limit?: number } = {},
+): Promise<Task[]> {
+  const url = new URL(`${API_URL}/tasks`);
+  if (opts.status) url.searchParams.set('status', opts.status);
+  if (opts.limit) url.searchParams.set('limit', String(opts.limit));
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`tasks ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { tasks: Task[] };
+  return json.tasks;
+}
+
+export async function createTask(input: {
+  title: string;
+  detail?: string;
+  priority?: TaskPriority;
+  dueDate?: string | null;
+  origin?: 'manual' | 'coach' | 'extracted' | 'meeting';
+  sourceNodeId?: string | null;
+}): Promise<Task> {
+  const res = await fetch(`${API_URL}/tasks`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`create_task ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { task: Task };
+  return json.task;
+}
+
+export async function updateTask(
+  id: string,
+  patch: { title?: string; detail?: string | null; status?: TaskStatus; priority?: TaskPriority; dueDate?: string | null },
+): Promise<void> {
+  const res = await fetch(`${API_URL}/tasks/${id}`, {
+    method: 'PATCH',
+    headers: await authHeaders(),
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw new Error(`update_task ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/tasks/${id}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`delete_task ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+export async function extractTasks(lookbackDays?: number): Promise<{ created: number; tasks: Task[] }> {
+  const res = await fetch(`${API_URL}/tasks/extract`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+  });
+  if (!res.ok) throw new Error(`extract ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
 // ---- Workspaces ---------------------------------------------------------
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
