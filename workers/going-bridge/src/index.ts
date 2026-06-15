@@ -59,9 +59,25 @@ async function main(): Promise<void> {
         external_id: s.externalId,
         external_metadata: { type: s.type, severity: s.severity ?? null, url: s.url ?? null, ts: s.ts },
       };
-      const { error } = await db
+      // Upsert manual: el índice único de nodes es PARCIAL (where external_id is
+      // not null), y PostgREST no puede expresar ese WHERE en su ON CONFLICT, así
+      // que .upsert({onConflict}) falla. Hacemos select -> update/insert.
+      const { data: existing } = await db
         .from('nodes')
-        .upsert(row, { onConflict: 'workspace_id,external_source,external_id' });
+        .select('id')
+        .eq('workspace_id', cfg.BRIDGE_WORKSPACE_ID)
+        .eq('external_source', 'going')
+        .eq('external_id', s.externalId)
+        .maybeSingle();
+      let error;
+      if (existing) {
+        ({ error } = await db
+          .from('nodes')
+          .update({ title: row.title, content: row.content, embedding, external_metadata: row.external_metadata })
+          .eq('id', existing.id));
+      } else {
+        ({ error } = await db.from('nodes').insert(row));
+      }
       if (!error) ingested++;
       else log('warn', 'node_upsert_failed', { externalId: s.externalId, error: error.message.slice(0, 160) });
     } catch (err) {
