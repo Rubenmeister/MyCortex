@@ -670,6 +670,41 @@ export async function getGoingSignals(limit = 40): Promise<GoingSignal[]> {
   return json.signals;
 }
 
+export type BridgeSource = {
+  id: string;
+  provider: 'github';
+  repo: string;
+  status: 'active' | 'paused' | 'error';
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  has_token: boolean;
+};
+
+export async function listBridgeSources(): Promise<BridgeSource[]> {
+  const res = await fetch(`${API_URL}/bridge/sources`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`sources ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { sources: BridgeSource[] };
+  return json.sources;
+}
+
+export async function addBridgeSource(repo: string, accessToken?: string): Promise<void> {
+  const res = await fetch(`${API_URL}/bridge/sources`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ repo, ...(accessToken ? { accessToken } : {}) }),
+  });
+  if (!res.ok) throw new Error(`add_source ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+export async function removeBridgeSource(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/bridge/sources/${id}`, {
+    method: 'DELETE',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`remove_source ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
 // ---- Agenda -------------------------------------------------------------
 
 export type AgendaEvent = {

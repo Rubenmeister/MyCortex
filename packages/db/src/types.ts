@@ -687,6 +687,37 @@ export type EntityMentionInsert = {
   node_id: string;
 };
 
+// Puente multi-tenant: fuente de negocio por workspace (repo de GitHub).
+export type BridgeSourceStatus = 'active' | 'paused' | 'error';
+
+export type BridgeSourceRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  provider: 'github';
+  repo: string;
+  access_token: string | null;
+  status: BridgeSourceStatus;
+  last_synced_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BridgeSourceInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  provider?: 'github';
+  repo: string;
+  access_token?: string | null;
+  status?: BridgeSourceStatus;
+};
+
+export type BridgeSourceUpdate = Partial<
+  Pick<BridgeSourceRow, 'repo' | 'access_token' | 'status' | 'last_synced_at' | 'last_error'>
+>;
+
 // Puente Going: briefing ejecutivo de fundador.
 export type ExecutiveBriefingRow = {
   id: string;
@@ -828,6 +859,12 @@ export type Database = {
         Row: ExecutiveBriefingRow;
         Insert: ExecutiveBriefingInsert;
         Update: Partial<ExecutiveBriefingInsert>;
+        Relationships: [];
+      };
+      bridge_sources: {
+        Row: BridgeSourceRow;
+        Insert: BridgeSourceInsert;
+        Update: BridgeSourceUpdate;
         Relationships: [];
       };
       telegram_links: {

@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  addBridgeSource,
   generateBriefing,
   getBriefing,
   getGoingSignals,
+  listBridgeSources,
+  removeBridgeSource,
+  type BridgeSource,
   type ExecutiveBriefing,
   type GoingSignal,
 } from '../../../lib/api';
@@ -37,6 +41,10 @@ export default function GoingPage() {
   const { current } = useWorkspace();
   const [briefing, setBriefing] = useState<ExecutiveBriefing | null>(null);
   const [signals, setSignals] = useState<GoingSignal[]>([]);
+  const [sources, setSources] = useState<BridgeSource[]>([]);
+  const [newRepo, setNewRepo] = useState('');
+  const [newToken, setNewToken] = useState('');
+  const [srcBusy, setSrcBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,15 +53,46 @@ export default function GoingPage() {
     setLoading(true);
     setError(null);
     try {
-      const [b, s] = await Promise.all([getBriefing(), getGoingSignals()]);
+      const [b, s, src] = await Promise.all([getBriefing(), getGoingSignals(), listBridgeSources()]);
       setBriefing(b);
       setSignals(s);
+      setSources(src);
     } catch (err) {
       setError(String(err));
     } finally {
       setLoading(false);
     }
   }, []);
+
+  const addSource = async () => {
+    const repo = newRepo.trim();
+    if (!repo) return;
+    setSrcBusy(true);
+    setError(null);
+    try {
+      await addBridgeSource(repo, newToken.trim() || undefined);
+      setNewRepo('');
+      setNewToken('');
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSrcBusy(false);
+    }
+  };
+
+  const removeSource = async (id: string) => {
+    setSrcBusy(true);
+    setError(null);
+    try {
+      await removeBridgeSource(id);
+      await load();
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setSrcBusy(false);
+    }
+  };
 
   useEffect(() => {
     if (current) void load();
@@ -89,6 +128,57 @@ export default function GoingPage() {
 
       {error && <div className="err">{error}</div>}
       {loading && <div className="muted">Cargando…</div>}
+
+      {!loading && (
+        <section className="srcs">
+          <div className="srcs-head">🔗 Fuentes conectadas</div>
+          {sources.length === 0 && (
+            <div className="srcs-empty">
+              Conectá un repo de GitHub y el puente va a traer sus señales (commits, PRs, CI,
+              seguridad) cada 6h.
+            </div>
+          )}
+          {sources.map((s) => (
+            <div key={s.id} className="srcrow">
+              <div className="srcrow-main">
+                <span className="srcrepo">{s.repo}</span>
+                {s.has_token ? (
+                  <span className="srctag">🔑 privado</span>
+                ) : (
+                  <span className="srctag pub">público</span>
+                )}
+                {s.last_error && <span className="srcerr" title={s.last_error}>⚠️ error</span>}
+                <div className="srcsub">
+                  {s.last_synced_at
+                    ? `última sync: ${new Date(s.last_synced_at).toLocaleString()}`
+                    : 'sin sincronizar aún (corre cada 6h)'}
+                </div>
+              </div>
+              <button type="button" className="mini" disabled={srcBusy} onClick={() => removeSource(s.id)}>
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="addsrc">
+            <input
+              value={newRepo}
+              onChange={(e) => setNewRepo(e.target.value)}
+              placeholder="owner/repo"
+              disabled={srcBusy}
+            />
+            <input
+              value={newToken}
+              onChange={(e) => setNewToken(e.target.value)}
+              placeholder="GitHub token (opcional, privados)"
+              type="password"
+              disabled={srcBusy}
+            />
+            <button type="button" className="btn" disabled={srcBusy || !newRepo.trim()} onClick={addSource}>
+              Conectar
+            </button>
+          </div>
+        </section>
+      )}
 
       {!loading && !briefing && signals.length === 0 && (
         <section className="empty">
@@ -189,6 +279,22 @@ export default function GoingPage() {
         .sig-type { font-size: 11px; font-weight: 700; white-space: nowrap; }
         .sig-title { color: #ddd; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .sig-date { color: #666; font-size: 11px; white-space: nowrap; }
+        .srcs { background: #0e0e14; border: 1px solid #1a1a22; border-radius: 12px; padding: 16px 18px; margin-bottom: 20px; }
+        .srcs-head { color: #8ab4f8; font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+        .srcs-empty { color: #888; font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+        .srcrow { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid #16161e; }
+        .srcrow-main { min-width: 0; }
+        .srcrepo { color: #fff; font-size: 14px; font-weight: 600; }
+        .srctag { color: #9bd0e0; font-size: 10px; background: #14141c; border: 1px solid #1f2a30; border-radius: 99px; padding: 1px 8px; margin-left: 8px; }
+        .srctag.pub { color: #7fd6a6; border-color: #1f3026; }
+        .srcerr { color: #ff9b9b; font-size: 10px; margin-left: 8px; }
+        .srcsub { color: #666; font-size: 11px; margin-top: 3px; }
+        .addsrc { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+        .addsrc input { flex: 1; min-width: 140px; background: #111; border: 1px solid #1f1f2a; color: #eee; padding: 7px 10px; border-radius: 8px; font-size: 13px; }
+        .addsrc input:focus { outline: none; border-color: #2a2a3a; }
+        .mini { background: transparent; border: 1px solid #2a2a3a; color: #bbb; width: 28px; height: 26px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+        .mini:hover { border-color: #6a3a3a; color: #ff9b9b; }
+        .mini:disabled { opacity: 0.4; cursor: not-allowed; }
       `}</style>
     </div>
   );
