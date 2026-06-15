@@ -687,6 +687,30 @@ export type EntityMentionInsert = {
   node_id: string;
 };
 
+// Puente Going: briefing ejecutivo de fundador.
+export type ExecutiveBriefingRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  summary: string;
+  health: string;
+  risks: string[];
+  priorities: string[];
+  signals_analyzed: number;
+  created_at: string;
+};
+
+export type ExecutiveBriefingInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  summary: string;
+  health?: string;
+  risks?: string[];
+  priorities?: string[];
+  signals_analyzed?: number;
+};
+
 // ---- Database ----------------------------------------------------------
 
 export type Database = {
@@ -798,6 +822,12 @@ export type Database = {
         Row: EntityMentionRow;
         Insert: EntityMentionInsert;
         Update: Partial<EntityMentionInsert>;
+        Relationships: [];
+      };
+      executive_briefings: {
+        Row: ExecutiveBriefingRow;
+        Insert: ExecutiveBriefingInsert;
+        Update: Partial<ExecutiveBriefingInsert>;
         Relationships: [];
       };
       telegram_links: {

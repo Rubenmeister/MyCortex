@@ -13,6 +13,7 @@ const TABS = [
   { href: '/app/chat', label: 'Hablar', icon: '🗨️' },
   { href: '/app/diario', label: 'Diario', icon: '📓' },
   { href: '/app/grafo', label: 'Grafo', icon: '🕸️' },
+  { href: '/app/going', label: 'Going', icon: '🚖' },
   { href: '/app/agenda', label: 'Agenda', icon: '📅' },
   { href: '/app/tasks', label: 'Tareas', icon: '✅' },
   { href: '/app/capture', label: 'Capturar', icon: '✎' },

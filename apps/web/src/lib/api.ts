@@ -626,6 +626,50 @@ export async function extractEntities(lookbackDays?: number): Promise<{ entities
   return res.json();
 }
 
+// ---- Puente Going (briefing ejecutivo) ----------------------------------
+
+export type ExecutiveBriefing = {
+  id: string;
+  summary: string;
+  health: string;
+  risks: string[];
+  priorities: string[];
+  signals_analyzed: number;
+  created_at: string;
+};
+
+export type GoingSignal = {
+  id: string;
+  title: string | null;
+  content: string;
+  created_at: string;
+  external_metadata: { type?: string; severity?: string | null; url?: string | null } | null;
+};
+
+export async function getBriefing(): Promise<ExecutiveBriefing | null> {
+  const res = await fetch(`${API_URL}/bridge/briefing`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`briefing ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { briefing: ExecutiveBriefing | null };
+  return json.briefing;
+}
+
+export async function generateBriefing(): Promise<{ signalsAnalyzed: number }> {
+  const res = await fetch(`${API_URL}/bridge/briefing/generate`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`briefing_gen ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+export async function getGoingSignals(limit = 40): Promise<GoingSignal[]> {
+  const res = await fetch(`${API_URL}/bridge/signals?limit=${limit}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`signals ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { signals: GoingSignal[] };
+  return json.signals;
+}
+
 // ---- Agenda -------------------------------------------------------------
 
 export type AgendaEvent = {

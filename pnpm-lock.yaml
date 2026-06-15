@@ -648,6 +648,43 @@ importers:
         specifier: ^5.7.0
         version: 5.9.3
 
+  workers/going-bridge:
+    dependencies:
+      '@mycortex/ai-core':
+        specifier: workspace:*
+        version: link:../../packages/ai-core
+      '@mycortex/cortex-engine':
+        specifier: workspace:*
+        version: link:../../packages/cortex-engine
+      '@mycortex/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@mycortex/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
+    devDependencies:
+      '@mycortex/config-eslint':
+        specifier: workspace:*
+        version: link:../../packages/config-eslint
+      '@mycortex/config-tsconfig':
+        specifier: workspace:*
+        version: link:../../packages/config-tsconfig
+      '@types/node':
+        specifier: ^22.10.0
+        version: 22.19.17
+      tsup:
+        specifier: ^8.3.0
+        version: 8.5.1(jiti@1.21.7)(postcss@8.5.14)(tsx@4.21.0)(typescript@5.9.3)
+      tsx:
+        specifier: ^4.19.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+
 packages:
 
   '@0no-co/graphql.web@1.2.0':

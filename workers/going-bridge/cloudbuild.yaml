@@ -1,0 +1,71 @@
+# Cloud Build pipeline para el worker going-bridge (Cloud Run Job).
+# Espeja workers/cortex-coach/cloudbuild.yaml.
+#
+#   gcloud builds submit . \
+#     --config=workers/going-bridge/cloudbuild.yaml \
+#     --project=mycortex-prod \
+#     --substitutions=_REGION=us-east1
+#
+# Antes de desplegar: crear secrets y setear las env de config (repo + workspace):
+#   gcloud secrets create mycortex-github-token --data-file=-   (token de GitHub)
+#   y pasar BRIDGE_WORKSPACE_ID / BRIDGE_USER_ID / GOING_GITHUB_REPO via --set-env-vars.
+#
+# Schedule sugerido (cada 6h):
+#   gcloud scheduler jobs create http going-bridge-trigger \
+#     --schedule="0 */6 * * *" --time-zone="America/Guayaquil" --location=us-east1 \
+#     --uri="https://us-east1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mycortex-prod/jobs/going-bridge:run" \
+#     --http-method=POST \
+#     --oauth-service-account-email=mycortex-cron-sa@mycortex-prod.iam.gserviceaccount.com
+
+substitutions:
+  _REGION: us-east1
+  _JOB: going-bridge
+  _REPO: mycortex
+  _SUPABASE_URL: 'https://ifsdhwihdjrogebsutem.supabase.co'
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --file=workers/going-bridge/Dockerfile
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        FLAGS="--image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
+          --region=${_REGION} --task-timeout=900s --memory=1Gi --cpu=1 --max-retries=1 \
+          --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+          --set-env-vars=SUPABASE_URL=${_SUPABASE_URL} \
+          --set-secrets=SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest"
+        if gcloud run jobs describe ${_JOB} --region=${_REGION} --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update ${_JOB} $FLAGS
+        else
+          gcloud run jobs create ${_JOB} $FLAGS
+        fi
+        # Nota: BRIDGE_WORKSPACE_ID, BRIDGE_USER_ID, GOING_GITHUB_REPO y el secret
+        # GITHUB_TOKEN se setean a mano (config por instalación), p.ej.:
+        #   gcloud run jobs update ${_JOB} --region=${_REGION} \
+        #     --update-env-vars=BRIDGE_WORKSPACE_ID=...,BRIDGE_USER_ID=...,GOING_GITHUB_REPO=owner/repo \
+        #     --update-secrets=GITHUB_TOKEN=mycortex-github-token:latest
+
+images:
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
