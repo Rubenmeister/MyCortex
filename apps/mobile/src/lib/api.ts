@@ -244,3 +244,162 @@ export async function sendChat(message: string): Promise<string> {
   const json = (await res.json()) as { reply: string };
   return json.reply;
 }
+
+// ---- Diario -------------------------------------------------------------
+
+export type CoachEpisode = {
+  id: string;
+  label: string;
+  narrative: string;
+  themes: string[];
+  mood: string;
+  progress: string;
+  loose_threads: string[];
+  nodes_analyzed: number;
+  created_at: string;
+};
+
+export async function listEpisodes(): Promise<CoachEpisode[]> {
+  const res = await fetch(`${API_URL}/coach/episodes?limit=12`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`episodes ${res.status}`);
+  const json = (await res.json()) as { episodes: CoachEpisode[] };
+  return json.episodes;
+}
+
+export async function generateEpisode(): Promise<void> {
+  const res = await fetch(`${API_URL}/coach/episodes/generate`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`episode ${res.status}`);
+}
+
+// ---- Grafo --------------------------------------------------------------
+
+export type EntityType = 'persona' | 'proyecto' | 'organizacion' | 'lugar' | 'tema' | 'otro';
+export type Entity = { id: string; name: string; type: EntityType; summary: string; mention_count: number };
+export type EntityNode = { id: string; title: string | null; content: string; created_at: string };
+export type EntityDetail = {
+  entity: Entity & { aliases: string[] };
+  nodes: EntityNode[];
+  related: Array<{ id: string; name: string; type: EntityType; count: number }>;
+};
+
+export async function listEntities(): Promise<Entity[]> {
+  const res = await fetch(`${API_URL}/entities`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`entities ${res.status}`);
+  const json = (await res.json()) as { entities: Entity[] };
+  return json.entities;
+}
+
+export async function getEntity(id: string): Promise<EntityDetail> {
+  const res = await fetch(`${API_URL}/entities/${id}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`entity ${res.status}`);
+  return res.json();
+}
+
+export async function extractEntities(): Promise<{ entities: number; mentions: number }> {
+  const res = await fetch(`${API_URL}/entities/extract`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`extract ${res.status}`);
+  return res.json();
+}
+
+// ---- Agenda -------------------------------------------------------------
+
+export type AgendaEvent = {
+  nodeId: string;
+  title: string;
+  start: string | null;
+  end: string | null;
+  location: string | null;
+  attendees: string[];
+  description: string;
+};
+export type PrepSource = { id: string; origin: string; title: string | null; snippet: string };
+export type MeetingPrep = { event: AgendaEvent; brief: string; sources: PrepSource[] };
+
+export async function getUpcomingEvents(days = 7): Promise<AgendaEvent[]> {
+  const res = await fetch(`${API_URL}/agenda/upcoming?days=${days}`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`agenda ${res.status}`);
+  const json = (await res.json()) as { events: AgendaEvent[] };
+  return json.events;
+}
+
+export async function getMeetingPrep(eventNodeId: string): Promise<MeetingPrep> {
+  const res = await fetch(`${API_URL}/agenda/prep`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ eventNodeId }),
+  });
+  if (!res.ok) throw new Error(`prep ${res.status}`);
+  return res.json();
+}
+
+// ---- Going (briefing ejecutivo) -----------------------------------------
+
+export type ExecutiveBriefing = {
+  id: string;
+  summary: string;
+  health: string;
+  risks: string[];
+  priorities: string[];
+  signals_analyzed: number;
+  created_at: string;
+};
+export type GoingSignal = {
+  id: string;
+  title: string | null;
+  created_at: string;
+  external_metadata: { type?: string; severity?: string | null } | null;
+};
+export type BridgeSource = {
+  id: string;
+  repo: string;
+  status: string;
+  last_synced_at: string | null;
+  has_token: boolean;
+};
+
+export async function getBriefing(): Promise<ExecutiveBriefing | null> {
+  const res = await fetch(`${API_URL}/bridge/briefing`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`briefing ${res.status}`);
+  const json = (await res.json()) as { briefing: ExecutiveBriefing | null };
+  return json.briefing;
+}
+
+export async function generateBriefing(): Promise<void> {
+  const res = await fetch(`${API_URL}/bridge/briefing/generate`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`briefing_gen ${res.status}`);
+}
+
+export async function getGoingSignals(): Promise<GoingSignal[]> {
+  const res = await fetch(`${API_URL}/bridge/signals?limit=30`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`signals ${res.status}`);
+  const json = (await res.json()) as { signals: GoingSignal[] };
+  return json.signals;
+}
+
+export async function listBridgeSources(): Promise<BridgeSource[]> {
+  const res = await fetch(`${API_URL}/bridge/sources`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`sources ${res.status}`);
+  const json = (await res.json()) as { sources: BridgeSource[] };
+  return json.sources;
+}
+
+export async function addBridgeSource(repo: string): Promise<void> {
+  const res = await fetch(`${API_URL}/bridge/sources`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ repo }),
+  });
+  if (!res.ok) throw new Error(`add_source ${res.status}: ${await res.text()}`);
+}

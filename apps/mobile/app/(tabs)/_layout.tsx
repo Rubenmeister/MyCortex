@@ -35,13 +35,18 @@ export default function TabsLayout() {
         options={{ title: 'Tareas', tabBarIcon: ({ color }) => <Icon color={color}>✅</Icon> }}
       />
       <Tabs.Screen
-        name="settings"
-        options={{ title: 'Ajustes', tabBarIcon: ({ color }) => <Icon color={color}>⚙</Icon> }}
+        name="more"
+        options={{ title: 'Más', tabBarIcon: ({ color }) => <Icon color={color}>⋯</Icon> }}
       />
 
-      {/* Rutas que existen pero no van en la barra (accesibles por navegación). */}
+      {/* Rutas que existen pero no van en la barra (se llegan desde "Más"). */}
+      <Tabs.Screen name="settings" options={{ href: null, title: 'Ajustes' }} />
       <Tabs.Screen name="ask" options={{ href: null, title: 'Preguntar' }} />
       <Tabs.Screen name="nodes" options={{ href: null, title: 'Notas' }} />
+      <Tabs.Screen name="diario" options={{ href: null, title: 'Diario' }} />
+      <Tabs.Screen name="grafo" options={{ href: null, title: 'Grafo' }} />
+      <Tabs.Screen name="agenda" options={{ href: null, title: 'Agenda' }} />
+      <Tabs.Screen name="going" options={{ href: null, title: 'Going' }} />
     </Tabs>
   );
 }
