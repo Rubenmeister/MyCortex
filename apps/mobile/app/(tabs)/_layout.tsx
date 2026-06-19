@@ -19,33 +19,29 @@ export default function TabsLayout() {
       }}
     >
       <Tabs.Screen
+        name="coach"
+        options={{ title: 'Coach', tabBarIcon: ({ color }) => <Icon color={color}>🎯</Icon> }}
+      />
+      <Tabs.Screen
         name="index"
-        options={{
-          title: 'Capturar',
-          tabBarIcon: ({ color }) => <Icon color={color}>✎</Icon>,
-        }}
+        options={{ title: 'Capturar', tabBarIcon: ({ color }) => <Icon color={color}>✎</Icon> }}
       />
       <Tabs.Screen
-        name="ask"
-        options={{
-          title: 'Preguntar',
-          tabBarIcon: ({ color }) => <Icon color={color}>💬</Icon>,
-        }}
+        name="chat"
+        options={{ title: 'Hablar', tabBarIcon: ({ color }) => <Icon color={color}>🗨️</Icon> }}
       />
       <Tabs.Screen
-        name="nodes"
-        options={{
-          title: 'Notas',
-          tabBarIcon: ({ color }) => <Icon color={color}>☰</Icon>,
-        }}
+        name="tasks"
+        options={{ title: 'Tareas', tabBarIcon: ({ color }) => <Icon color={color}>✅</Icon> }}
       />
       <Tabs.Screen
         name="settings"
-        options={{
-          title: 'Ajustes',
-          tabBarIcon: ({ color }) => <Icon color={color}>⚙</Icon>,
-        }}
+        options={{ title: 'Ajustes', tabBarIcon: ({ color }) => <Icon color={color}>⚙</Icon> }}
       />
+
+      {/* Rutas que existen pero no van en la barra (accesibles por navegación). */}
+      <Tabs.Screen name="ask" options={{ href: null, title: 'Preguntar' }} />
+      <Tabs.Screen name="nodes" options={{ href: null, title: 'Notas' }} />
     </Tabs>
   );
 }

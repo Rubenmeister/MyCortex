@@ -26,8 +26,8 @@ jobs:
       # Tests (incluye el invariante de RLS multi-tenant).
       - run: pnpm test
 
-      # Type-check + build de todo menos mobile (tiene un desajuste de tipos
-      # React 19 preexistente; se excluye hasta resolverlo).
-      - run: pnpm exec turbo run type-check --filter=!@mycortex/mobile
+      # Type-check + build de TODO el monorepo (mobile incluido: el conflicto de
+      # tipos React 19 se resolvió con el override @types/react@18 en la raíz).
+      - run: pnpm exec turbo run type-check
 
-      - run: pnpm exec turbo run build --filter=!@mycortex/mobile
+      - run: pnpm exec turbo run build

@@ -112,3 +112,135 @@ export async function ask(args: {
   if (!res.ok) throw new Error(`ask ${res.status}: ${await res.text()}`);
   return res.json();
 }
+
+// ---- Coach --------------------------------------------------------------
+
+export type GrowthDomain =
+  | 'salud' | 'ejercicio' | 'proyectos' | 'productividad'
+  | 'aprendizaje' | 'finanzas' | 'relaciones' | 'bienestar' | 'otro';
+
+export type CoachSuggestion = {
+  domain: GrowthDomain;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: 'hoy' | 'esta-semana' | 'este-mes';
+  priority: 'alta' | 'media' | 'baja';
+  sourceNodeIds: string[];
+};
+
+export type CoachGeneration = {
+  result: { summary: string; focus: string; suggestions: CoachSuggestion[] };
+  meta: { nodesAnalyzed: number; lookbackDays: number };
+};
+
+export type CoachProfile = {
+  summary: string;
+  focus_areas: string[];
+  goals: string[];
+  routines: string;
+  trends: string;
+  wellbeing: string;
+  nodes_analyzed: number;
+  updated_at: string;
+};
+
+export async function getCoachProfile(): Promise<CoachProfile | null> {
+  const res = await fetch(`${API_URL}/coach/profile`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`coach_profile ${res.status}`);
+  const json = (await res.json()) as { profile: CoachProfile | null };
+  return json.profile;
+}
+
+export async function refreshCoachProfile(): Promise<CoachProfile> {
+  const res = await fetch(`${API_URL}/coach/profile/refresh`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`coach_profile_refresh ${res.status}`);
+  const json = (await res.json()) as { profile: CoachProfile };
+  return json.profile;
+}
+
+export async function generateCoach(lookbackDays?: number): Promise<CoachGeneration> {
+  const res = await fetch(`${API_URL}/coach/suggestions`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+  });
+  if (!res.ok) throw new Error(`coach ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// ---- Tareas -------------------------------------------------------------
+
+export type TaskStatus = 'todo' | 'doing' | 'done';
+export type TaskPriority = 'alta' | 'media' | 'baja';
+
+export type Task = {
+  id: string;
+  title: string;
+  detail: string | null;
+  status: TaskStatus;
+  priority: TaskPriority;
+  origin: string;
+  created_at: string;
+};
+
+export async function listTasks(): Promise<Task[]> {
+  const res = await fetch(`${API_URL}/tasks?limit=200`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`tasks ${res.status}`);
+  const json = (await res.json()) as { tasks: Task[] };
+  return json.tasks;
+}
+
+export async function createTask(title: string): Promise<void> {
+  const res = await fetch(`${API_URL}/tasks`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`create_task ${res.status}`);
+}
+
+export async function updateTaskStatus(id: string, status: TaskStatus): Promise<void> {
+  const res = await fetch(`${API_URL}/tasks/${id}`, {
+    method: 'PATCH',
+    headers: await authHeaders(),
+    body: JSON.stringify({ status }),
+  });
+  if (!res.ok) throw new Error(`update_task ${res.status}`);
+}
+
+export async function extractTasks(): Promise<{ created: number }> {
+  const res = await fetch(`${API_URL}/tasks/extract`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`extract ${res.status}`);
+  return res.json();
+}
+
+// ---- Chat (Hablar) ------------------------------------------------------
+
+export type ChatMessage = { id?: string; role: 'user' | 'assistant'; content: string };
+
+export async function getChatHistory(): Promise<ChatMessage[]> {
+  const res = await fetch(`${API_URL}/coach/chat?limit=50`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`chat_history ${res.status}`);
+  const json = (await res.json()) as { messages: ChatMessage[] };
+  return json.messages;
+}
+
+export async function sendChat(message: string): Promise<string> {
+  const res = await fetch(`${API_URL}/coach/chat`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ message }),
+  });
+  if (!res.ok) throw new Error(`chat ${res.status}: ${await res.text()}`);
+  const json = (await res.json()) as { reply: string };
+  return json.reply;
+}
