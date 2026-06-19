@@ -14,7 +14,7 @@ import {
   type CoachGeneration,
   type CoachProfile,
   type CoachSuggestion,
-} from '../../src/lib/api.js';
+} from '../../src/lib/api';
 
 const DOMAIN_EMOJI: Record<string, string> = {
   salud: '🩺', ejercicio: '💪', proyectos: '🚀', productividad: '⚡',

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { generateEpisode, listEpisodes, type CoachEpisode } from '../../src/lib/api.js';
+import { generateEpisode, listEpisodes, type CoachEpisode } from '../../src/lib/api';
 
 export default function DiarioScreen() {
   const [episodes, setEpisodes] = useState<CoachEpisode[]>([]);

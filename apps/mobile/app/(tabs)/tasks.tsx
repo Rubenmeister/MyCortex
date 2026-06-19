@@ -15,7 +15,7 @@ import {
   updateTaskStatus,
   type Task,
   type TaskStatus,
-} from '../../src/lib/api.js';
+} from '../../src/lib/api';
 
 const PRIORITY_COLOR: Record<string, string> = { alta: '#ff9b9b', media: '#fb6', baja: '#9bc' };
 const NEXT: Partial<Record<TaskStatus, TaskStatus>> = { todo: 'doing', doing: 'done' };

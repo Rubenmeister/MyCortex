@@ -15,7 +15,7 @@ import {
   listBridgeSources,
   type BridgeSource,
   type ExecutiveBriefing,
-} from '../../src/lib/api.js';
+} from '../../src/lib/api';
 
 export default function GoingScreen() {
   const [briefing, setBriefing] = useState<ExecutiveBriefing | null>(null);

@@ -1,6 +1,6 @@
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../src/lib/auth.js';
+import { useAuth } from '../../src/lib/auth';
 
 export default function SettingsScreen() {
   const router = useRouter();

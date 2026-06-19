@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { listRecent, runCortex, type RecentNode } from '../../src/lib/api.js';
+import { listRecent, runCortex, type RecentNode } from '../../src/lib/api';
 
 const KIND_EMOJI: Record<string, string> = {
   task: '📋',

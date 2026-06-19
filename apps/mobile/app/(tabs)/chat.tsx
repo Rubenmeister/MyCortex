@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { getChatHistory, sendChat, type ChatMessage } from '../../src/lib/api.js';
+import { getChatHistory, sendChat, type ChatMessage } from '../../src/lib/api';
 
 export default function ChatScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);

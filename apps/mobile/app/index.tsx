@@ -1,6 +1,6 @@
 import { Redirect } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
-import { useAuth } from '../src/lib/auth.js';
+import { useAuth } from '../src/lib/auth';
 
 export default function Gate() {
   const { session, loading } = useAuth();

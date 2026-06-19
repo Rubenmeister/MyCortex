@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { extractEntities, getEntity, listEntities, type Entity, type EntityDetail } from '../../src/lib/api.js';
+import { extractEntities, getEntity, listEntities, type Entity, type EntityDetail } from '../../src/lib/api';
 
 const TYPE_EMOJI: Record<string, string> = {
   persona: '👤', proyecto: '🚀', organizacion: '🏢', lugar: '📍', tema: '🏷️', otro: '•',

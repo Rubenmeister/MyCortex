@@ -1,5 +1,5 @@
 import { Stack } from 'expo-router';
-import { AuthProvider } from '../src/lib/auth.js';
+import { AuthProvider } from '../src/lib/auth';
 import { StatusBar } from 'expo-status-bar';
 
 export default function RootLayout() {

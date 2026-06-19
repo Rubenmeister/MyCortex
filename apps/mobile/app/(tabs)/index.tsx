@@ -11,14 +11,14 @@ import {
   View,
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { ingestAudio, ingestText, type IngestResult } from '../../src/lib/api.js';
+import { ingestAudio, ingestText, type IngestResult } from '../../src/lib/api';
 import {
   ensureAudioReady,
   readAsBase64,
   startRecording,
   stopRecording,
   type RecordingHandle,
-} from '../../src/lib/audio.js';
+} from '../../src/lib/audio';
 
 const KIND_EMOJI: Record<string, string> = {
   task: '📋',

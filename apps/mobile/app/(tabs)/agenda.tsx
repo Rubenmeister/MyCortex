@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getMeetingPrep, getUpcomingEvents, type AgendaEvent, type MeetingPrep } from '../../src/lib/api.js';
+import { getMeetingPrep, getUpcomingEvents, type AgendaEvent, type MeetingPrep } from '../../src/lib/api';
 
 function formatWhen(iso: string | null): string {
   if (!iso) return 'sin fecha';

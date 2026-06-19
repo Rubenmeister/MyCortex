@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Audio as AudioNs } from 'expo-av';
-import { ask, type AskResult } from '../../src/lib/api.js';
+import { ask, type AskResult } from '../../src/lib/api';
 import {
   ensureAudioReady,
   playBase64Audio,
@@ -21,7 +21,7 @@ import {
   startRecording,
   stopRecording,
   type RecordingHandle,
-} from '../../src/lib/audio.js';
+} from '../../src/lib/audio';
 
 type Status =
   | { kind: 'idle' }
