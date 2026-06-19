@@ -16,6 +16,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@babel/runtime": "^7.25.0",
     "@supabase/supabase-js": "^2.46.0",
     "expo": "~52.0.0",
     "expo-av": "~15.0.0",
