@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80" role="img" aria-label="MyCortex">
+  <!-- Solo el emblema, fondo transparente (favicon / marca de agua). -->
+  <defs>
+    <linearGradient id="mci" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <polygon points="40,9 66.8,24.5 66.8,55.5 40,71 13.2,55.5 13.2,24.5"
+           fill="none" stroke="url(#mci)" stroke-width="2.6" stroke-linejoin="round"/>
+  <g stroke="url(#mci)" stroke-width="1.5" opacity="0.7">
+    <line x1="40" y1="40" x2="28" y2="27"/><line x1="40" y1="40" x2="53" y2="28"/>
+    <line x1="40" y1="40" x2="29" y2="53"/><line x1="40" y1="40" x2="52" y2="52"/>
+    <line x1="40" y1="40" x2="40" y2="22"/><line x1="28" y1="27" x2="40" y2="22"/>
+    <line x1="53" y1="28" x2="40" y2="22"/>
+  </g>
+  <g fill="#a855f7">
+    <circle cx="28" cy="27" r="2.8"/><circle cx="53" cy="28" r="2.8"/>
+    <circle cx="29" cy="53" r="2.8"/><circle cx="52" cy="52" r="2.8"/><circle cx="40" cy="22" r="2.8"/>
+  </g>
+  <circle cx="40" cy="40" r="4.8" fill="#22d3ee"/>
+</svg>
