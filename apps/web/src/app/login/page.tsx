@@ -34,7 +34,7 @@ function LoginFormFallback() {
 }
 
 function LoginForm() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, requestPasswordReset } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   // Allow callers (e.g. /invite/:token) to send the user back to a
@@ -47,7 +47,7 @@ function LoginForm() {
   // a second route. Defaults to signin; if the URL has ?mode=signup
   // (used by the shared invitation link) we land directly on signup.
   const initialMode = searchParams.get('mode') === 'signup' ? 'signup' : 'signin';
-  const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [mode, setMode] = useState<'signin' | 'signup' | 'reset'>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -56,13 +56,27 @@ function LoginForm() {
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    setErr(null);
+    setInfo(null);
+
+    if (mode === 'reset') {
+      if (!email.trim()) {
+        setErr('Ingresá tu email.');
+        return;
+      }
+      setBusy(true);
+      const r = await requestPasswordReset(email.trim());
+      setBusy(false);
+      if (r.error) setErr(r.error);
+      else setInfo('Si ese email tiene cuenta, te enviamos un link para restablecer tu contraseña. Revisá tu bandeja (y el spam).');
+      return;
+    }
+
     if (password.length < 6) {
       setErr('La contraseña debe tener al menos 6 caracteres.');
       return;
     }
     setBusy(true);
-    setErr(null);
-    setInfo(null);
     if (mode === 'signin') {
       const r = await signIn(email.trim(), password);
       setBusy(false);
@@ -84,12 +98,13 @@ function LoginForm() {
   };
 
   const isSignup = mode === 'signup';
+  const isReset = mode === 'reset';
 
   return (
     <main className="login-root">
       <form className="card" onSubmit={onSubmit}>
         <h1>MyCortex</h1>
-        <p className="subtitle">Tu segundo cerebro</p>
+        <p className="subtitle">{isReset ? 'Restablecer contraseña' : 'Tu segundo cerebro'}</p>
         <label>Email</label>
         <input
           type="email"
@@ -99,31 +114,50 @@ function LoginForm() {
           autoComplete="email"
           required
         />
-        <label>Contraseña</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          autoComplete={isSignup ? 'new-password' : 'current-password'}
-          minLength={6}
-          required
-        />
+        {!isReset && (
+          <>
+            <label>Contraseña</label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              autoComplete={isSignup ? 'new-password' : 'current-password'}
+              minLength={6}
+              required
+            />
+          </>
+        )}
         {err && <div className="error">{err}</div>}
         {info && <div className="info">{info}</div>}
         <button type="submit" disabled={busy}>
-          {busy ? '…' : isSignup ? 'Crear cuenta' : 'Entrar'}
+          {busy ? '…' : isReset ? 'Enviar link' : isSignup ? 'Crear cuenta' : 'Entrar'}
         </button>
+
+        {mode === 'signin' && (
+          <button
+            type="button"
+            className="link"
+            onClick={() => {
+              setMode('reset');
+              setErr(null);
+              setInfo(null);
+            }}
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        )}
+
         <button
           type="button"
           className="link"
           onClick={() => {
-            setMode(isSignup ? 'signin' : 'signup');
+            setMode(isSignup || isReset ? 'signin' : 'signup');
             setErr(null);
             setInfo(null);
           }}
         >
-          {isSignup ? '¿Ya tenés cuenta? Entrá' : '¿Sos nuevo? Creá tu cuenta'}
+          {isReset ? '← Volver a entrar' : isSignup ? '¿Ya tenés cuenta? Entrá' : '¿Sos nuevo? Creá tu cuenta'}
         </button>
       </form>
       <style jsx>{`

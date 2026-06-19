@@ -15,6 +15,8 @@ type AuthState = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string) => Promise<{ error: string | null; needsConfirmation: boolean }>;
+  requestPasswordReset: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -59,12 +61,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null, needsConfirmation };
   };
 
+  // Envía el email de recuperación con un link a /reset.
+  const requestPasswordReset: AuthState['requestPasswordReset'] = async (email) => {
+    const redirectTo = typeof window !== 'undefined' ? `${window.location.origin}/reset` : undefined;
+    const { error } = await supabase.auth.resetPasswordForEmail(
+      email,
+      redirectTo ? { redirectTo } : undefined,
+    );
+    return { error: error?.message ?? null };
+  };
+
+  // Cambia la contraseña del usuario en sesión (usado en /reset tras el link).
+  const updatePassword: AuthState['updatePassword'] = async (password) => {
+    const { error } = await supabase.auth.updateUser({ password });
+    return { error: error?.message ?? null };
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
   return (
-    <Ctx.Provider value={{ session, loading, signIn, signUp, signOut }}>{children}</Ctx.Provider>
+    <Ctx.Provider
+      value={{ session, loading, signIn, signUp, requestPasswordReset, updatePassword, signOut }}
+    >
+      {children}
+    </Ctx.Provider>
   );
 }
 
