@@ -1,7 +1,7 @@
 import { anthropic } from '@ai-sdk/anthropic';
 import { openai } from '@ai-sdk/openai';
 import { google } from '@ai-sdk/google';
-import { embed } from 'ai';
+import { embed, generateText } from 'ai';
 
 export const models = {
   classifier: openai('gpt-4o-mini'),
@@ -47,6 +47,35 @@ export async function tts(
     throw new Error(`tts ${res.status}: ${(await res.text()).slice(0, 200)}`);
   }
   return Buffer.from(await res.arrayBuffer());
+}
+
+const IMAGE_OCR_PROMPT =
+  'Transcribe TODO el texto visible en esta imagen (OCR). Si además hay contenido no textual relevante, ' +
+  'descríbelo en una línea. Si no hay texto, describe brevemente qué muestra. Responde solo con el ' +
+  'texto/descripción, sin preámbulos. Español neutro de Ecuador ("tú", nunca voseo).';
+
+/**
+ * OCR + descripción de una imagen usando el modelo con visión (Claude). Para
+ * capturar imágenes (WhatsApp, etc.) al segundo cerebro como texto buscable.
+ */
+export async function describeImage(
+  image: Buffer | Uint8Array,
+  opts: { mimeType?: string; prompt?: string } = {},
+): Promise<string> {
+  const { text } = await generateText({
+    model: models.reasoner,
+    maxTokens: 1500,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: opts.prompt ?? IMAGE_OCR_PROMPT },
+          { type: 'image', image, ...(opts.mimeType ? { mimeType: opts.mimeType } : {}) },
+        ],
+      },
+    ],
+  });
+  return text.trim();
 }
 
 export { tavilySearch, type TavilyResult, type TavilySearchResponse, type TavilySearchOptions } from './tavily.js';

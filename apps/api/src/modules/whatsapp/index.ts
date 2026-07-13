@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { requireAuth } from '../../lib/auth.js';
 import { getDb } from '../../lib/db.js';
 import { getEnv } from '../../lib/env.js';
+import { describeImage } from '@mycortex/ai-core';
 import { transcribeAudio } from '../ingesta/whisper.js';
 import { downloadMedia, sendText } from './client.js';
 
@@ -375,17 +376,30 @@ async function processMessage(
     return;
   }
 
-  if (msg.type === 'image') {
-    // For v1 we capture the caption only; image upload + OCR is a follow-up.
-    const caption = msg.image?.caption?.trim();
-    if (caption) {
-      await ingestText(apiUrl, env, identity, caption);
-      await sendText(msg.from, '🖼 Caption capturado. (OCR de imagen aún pendiente.)');
-    } else {
-      await sendText(
-        msg.from,
-        '🖼 Recibí la imagen, pero todavía no hago OCR. Mandala con un texto que la describa y la capturo.',
-      );
+  if (msg.type === 'image' && msg.image) {
+    const caption = msg.image.caption?.trim();
+    try {
+      const { buffer, mimeType } = await downloadMedia(msg.image.id);
+      const extracted = await describeImage(buffer, { mimeType });
+      const combined = [caption, extracted].filter(Boolean).join('\n\n').trim();
+      if (combined) {
+        await ingestText(apiUrl, env, identity, combined);
+        await sendText(
+          msg.from,
+          `🖼 Imagen leída y capturada:\n"${extracted.slice(0, 200)}${extracted.length > 200 ? '…' : ''}"`,
+        );
+      } else {
+        await sendText(msg.from, '🖼 No pude leer nada de la imagen. Prueba con otra o descríbela en texto.');
+      }
+    } catch (err) {
+      console.error(JSON.stringify({ level: 'error', msg: 'whatsapp_image_ocr_failed', err: String(err) }));
+      // Degradación: si el OCR falla pero hay caption, al menos guardamos eso.
+      if (caption) {
+        await ingestText(apiUrl, env, identity, caption);
+        await sendText(msg.from, '🖼 Guardé el texto que la acompañaba; no pude procesar la imagen esta vez.');
+      } else {
+        await sendText(msg.from, '🖼 No pude procesar la imagen. Prueba de nuevo o descríbela en texto.');
+      }
     }
     return;
   }
