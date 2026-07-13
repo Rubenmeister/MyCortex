@@ -9,6 +9,7 @@ import {
   tts,
   type TavilyResult,
 } from '@mycortex/ai-core';
+import { buildContextBlock } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
 import { transcribeAudio } from '../ingesta/whisper.js';
@@ -333,10 +334,12 @@ export const askModule: FastifyPluginAsync = async (server) => {
             .map((r, i) => `  [W${i + 1}] ${r.title} — ${r.url}\n      ${r.content.slice(0, 280)}`)
             .join('\n');
 
+    const contextBlock = await buildContextBlock(auth.db, auth.workspaceId);
     const userPrompt =
-      noteSources.length === 0 && webResults.length === 0
+      contextBlock +
+      (noteSources.length === 0 && webResults.length === 0
         ? `PREGUNTA: ${question}\n\nNo hay información disponible de ninguna fuente.`
-        : `PREGUNTA: ${question}${noteSection}${webSection}`;
+        : `PREGUNTA: ${question}${noteSection}${webSection}`);
 
     // 5. Generate answer with Claude.
     //    Pick the prompt that matches what we actually gave it: telling

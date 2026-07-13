@@ -2,6 +2,7 @@ import { embedText, generateObject, generateText, models } from '@mycortex/ai-co
 import type { Db } from '@mycortex/db';
 import type { CoachEpisodeRow, CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
 import { z } from 'zod';
+import { buildContextBlock } from './context.js';
 
 /**
  * Motor del Coach de crecimiento personal. Vive en el package (no en la api)
@@ -141,9 +142,11 @@ export async function generateCoachSuggestions(
 
   // "El coach que te conoce": si hay un perfil aprendido, lo inyectamos para
   // personalizar y dar continuidad (no re-derivar tu vida en cada corrida).
+  const contextBlock = await buildContextBlock(db, workspaceId);
   const profileBlock = await buildProfileBlock(db, workspaceId);
 
   const prompt =
+    contextBlock +
     profileBlock +
     `Analiza el siguiente material del usuario (${nodes.length} ítems de los últimos ${lookbackDays} días) ` +
     `y genera su coaching de crecimiento personal. Cita en sourceNodeIds los ítems que uses.\n\n` +
@@ -285,9 +288,11 @@ export async function deriveUserProfile(
 
   let derived = { summary: '', focusAreas: [] as string[], goals: [] as string[], routines: '', trends: '', wellbeing: '' };
   if (nodes.length >= MIN_NODES_FOR_COACHING) {
+    const contextBlock = await buildContextBlock(db, workspaceId);
     const prompt =
+      contextBlock +
       `Construye el perfil del usuario a partir de estos ${nodes.length} ítems de los últimos ${lookbackDays} días ` +
-      `(presta atención a las fechas para las tendencias).\n\n` +
+      `(presta atención a las fechas para las tendencias). Si el CONTEXTO declarado arriba afirma algo, respétalo.\n\n` +
       nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
     const { object } = await generateObject({
       model: models.reasoner,
@@ -387,8 +392,10 @@ export async function generateEpisode(
   if (nodes.length === 0) {
     derived.narrative = 'Un período tranquilo: no registré material nuevo en tu segundo cerebro.';
   } else {
+    const contextBlock = await buildContextBlock(db, workspaceId);
     const profileBlock = await buildProfileBlock(db, workspaceId);
     const prompt =
+      contextBlock +
       profileBlock +
       `Escribe el episodio de diario para "${label}" a partir de estos ${nodes.length} ítems del período.\n\n` +
       nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
@@ -441,6 +448,7 @@ Reglas:
 
 /** Contexto de coaching para la conversación (perfil + diario + sugerencias + tareas + RAG). */
 async function buildChatContext(db: Db, workspaceId: string, message: string): Promise<string> {
+  const contextBlock = await buildContextBlock(db, workspaceId);
   const profileBlock = await buildProfileBlock(db, workspaceId);
 
   const { data: ep } = await db
@@ -486,6 +494,7 @@ async function buildChatContext(db: Db, workspaceId: string, message: string): P
   }
 
   const parts = ['CONTEXTO:'];
+  if (contextBlock) parts.push(contextBlock.trim());
   if (profileBlock) parts.push(profileBlock.trim());
   if (ep) parts.push(`Último episodio (${ep.label}): ${ep.narrative.slice(0, 400)}${ep.mood ? ` | Ánimo: ${ep.mood}` : ''}${ep.progress ? ` | Progreso: ${ep.progress}` : ''}`);
   if (sugg?.length) parts.push(`Sugerencias pendientes:\n${sugg.map((s) => `- [${s.domain}] ${s.title}: ${s.action}`).join('\n')}`);

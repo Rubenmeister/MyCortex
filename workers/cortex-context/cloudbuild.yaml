@@ -1,0 +1,75 @@
+# Cloud Build pipeline para el worker cortex-context (Cloud Run Job).
+# Espeja workers/cortex-entities/cloudbuild.yaml.
+#
+#   gcloud builds submit . \
+#     --config=workers/cortex-context/cloudbuild.yaml \
+#     --project=mycortex-prod \
+#     --substitutions=_REGION=us-east1
+#
+# Schedule sugerido (lunes 7:30am Ecuador, tras el coach):
+#   gcloud scheduler jobs create http cortex-context-trigger \
+#     --schedule="30 7 * * 1" --time-zone="America/Guayaquil" --location=us-east1 \
+#     --uri="https://us-east1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/mycortex-prod/jobs/cortex-context:run" \
+#     --http-method=POST \
+#     --oauth-service-account-email=mycortex-cron-sa@mycortex-prod.iam.gserviceaccount.com
+
+substitutions:
+  _REGION: us-east1
+  _JOB: cortex-context
+  _REPO: mycortex
+  _SUPABASE_URL: 'https://ifsdhwihdjrogebsutem.supabase.co'
+
+steps:
+  - name: gcr.io/cloud-builders/docker
+    id: build
+    args:
+      - build
+      - --file=workers/cortex-context/Dockerfile
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
+      - --tag=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+      - .
+
+  - name: gcr.io/cloud-builders/docker
+    id: push
+    args:
+      - push
+      - --all-tags
+      - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}
+
+  - name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    id: deploy
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        if gcloud run jobs describe ${_JOB} --region=${_REGION} --project=$PROJECT_ID >/dev/null 2>&1; then
+          gcloud run jobs update ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
+            --region=${_REGION} \
+            --task-timeout=900s \
+            --memory=1Gi \
+            --cpu=1 \
+            --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="SUPABASE_URL=${_SUPABASE_URL}" \
+            --set-secrets="SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,OPENAI_API_KEY=mycortex-openai:latest"
+        else
+          gcloud run jobs create ${_JOB} \
+            --image=us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID \
+            --region=${_REGION} \
+            --task-timeout=900s \
+            --memory=1Gi \
+            --cpu=1 \
+            --max-retries=1 \
+            --service-account=mycortex-cron-sa@$PROJECT_ID.iam.gserviceaccount.com \
+            --set-env-vars="SUPABASE_URL=${_SUPABASE_URL}" \
+            --set-secrets="SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,OPENAI_API_KEY=mycortex-openai:latest"
+        fi
+
+images:
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:$BUILD_ID
+  - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_JOB}:latest
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8

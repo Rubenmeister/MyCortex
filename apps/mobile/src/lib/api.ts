@@ -273,6 +273,69 @@ export async function extractTasks(): Promise<{ created: number }> {
   return res.json();
 }
 
+// ---- Contexto curado (capa 1) -------------------------------------------
+
+export type WorkspaceContext = { body: string; updated_at: string | null };
+export type ContextProposal = {
+  id: string;
+  section: string;
+  text: string;
+  rationale: string | null;
+  status: 'pending' | 'accepted' | 'rejected';
+};
+
+export async function getContext(): Promise<WorkspaceContext> {
+  const res = await fetch(`${API_URL}/context`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`context ${res.status}`);
+  const json = (await res.json()) as { context: WorkspaceContext };
+  return json.context;
+}
+
+export async function saveContext(body: string): Promise<WorkspaceContext> {
+  const res = await fetch(`${API_URL}/context`, {
+    method: 'PUT',
+    headers: await authHeaders(),
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) throw new Error(`save_context ${res.status}`);
+  const json = (await res.json()) as { context: WorkspaceContext };
+  return json.context;
+}
+
+export async function listContextProposals(): Promise<ContextProposal[]> {
+  const res = await fetch(`${API_URL}/context/proposals`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`context_proposals ${res.status}`);
+  const json = (await res.json()) as { proposals: ContextProposal[] };
+  return json.proposals;
+}
+
+export async function proposeContext(): Promise<{ created: number }> {
+  const res = await fetch(`${API_URL}/context/propose`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: '{}',
+  });
+  if (!res.ok) throw new Error(`propose ${res.status}`);
+  return res.json();
+}
+
+export async function acceptContextProposal(id: string): Promise<{ body?: string }> {
+  const res = await fetch(`${API_URL}/context/proposals/${id}/accept`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`accept ${res.status}`);
+  return res.json();
+}
+
+export async function rejectContextProposal(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/context/proposals/${id}/reject`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`reject ${res.status}`);
+}
+
 // ---- Chat (Hablar) ------------------------------------------------------
 
 export type ChatMessage = { id?: string; role: 'user' | 'assistant'; content: string };

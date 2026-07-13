@@ -1,0 +1,29 @@
+{
+  "name": "@mycortex/cortex-context",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx --env-file=.env src/index.ts",
+    "build": "tsup",
+    "start": "node dist/index.js",
+    "lint": "eslint .",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mycortex/ai-core": "workspace:*",
+    "@mycortex/cortex-engine": "workspace:*",
+    "@mycortex/db": "workspace:*",
+    "@mycortex/shared-types": "workspace:*",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@mycortex/config-eslint": "workspace:*",
+    "@mycortex/config-tsconfig": "workspace:*",
+    "@types/node": "^22.10.0",
+    "tsup": "^8.3.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

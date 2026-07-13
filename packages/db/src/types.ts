@@ -590,6 +590,56 @@ export type CoachProfileInsert = {
 
 export type CoachProfileUpdate = Partial<Omit<CoachProfileInsert, 'workspace_id' | 'user_id'>>;
 
+// ---- Capa 1: contexto curado ("la constitución") ------------------------
+
+// El documento curado por el usuario (autoritativo, 1 fila por workspace).
+export type WorkspaceContextRow = {
+  workspace_id: string;
+  body: string;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export type WorkspaceContextInsert = {
+  workspace_id: string;
+  body?: string;
+  updated_by?: string | null;
+  updated_at?: string;
+};
+
+export type WorkspaceContextUpdate = Partial<Omit<WorkspaceContextInsert, 'workspace_id'>>;
+
+// Propuesta de la IA para enriquecer el contexto (loop bidireccional).
+export type ContextProposalStatus = 'pending' | 'accepted' | 'rejected';
+
+export type ContextProposalRow = {
+  id: string;
+  workspace_id: string;
+  user_id: string;
+  section: string;
+  text: string;
+  rationale: string | null;
+  source_node_ids: string[];
+  status: ContextProposalStatus;
+  created_at: string;
+  decided_at: string | null;
+};
+
+export type ContextProposalInsert = {
+  id?: string;
+  workspace_id: string;
+  user_id: string;
+  section?: string;
+  text: string;
+  rationale?: string | null;
+  source_node_ids?: string[];
+  status?: ContextProposalStatus;
+};
+
+export type ContextProposalUpdate = Partial<
+  Pick<ContextProposalRow, 'status' | 'decided_at'>
+>;
+
 // Diario / memoria episódica: un episodio por período.
 export type CoachEpisodeRow = {
   id: string;
@@ -832,6 +882,18 @@ export type Database = {
         Row: CoachProfileRow;
         Insert: CoachProfileInsert;
         Update: CoachProfileUpdate;
+        Relationships: [];
+      };
+      workspace_context: {
+        Row: WorkspaceContextRow;
+        Insert: WorkspaceContextInsert;
+        Update: WorkspaceContextUpdate;
+        Relationships: [];
+      };
+      context_proposals: {
+        Row: ContextProposalRow;
+        Insert: ContextProposalInsert;
+        Update: ContextProposalUpdate;
         Relationships: [];
       };
       coach_episodes: {

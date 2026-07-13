@@ -850,6 +850,76 @@ export async function extractTasks(lookbackDays?: number): Promise<{ created: nu
   return res.json();
 }
 
+// ---- Contexto curado (capa 1: "la constitución") ------------------------
+
+export type WorkspaceContext = { body: string; updated_at: string | null };
+
+export type ContextProposal = {
+  id: string;
+  section: string;
+  text: string;
+  rationale: string | null;
+  source_node_ids: string[];
+  status: 'pending' | 'accepted' | 'rejected';
+  created_at: string;
+};
+
+export async function getContext(): Promise<WorkspaceContext> {
+  const res = await fetch(`${API_URL}/context`, { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`context ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { context: WorkspaceContext };
+  return json.context;
+}
+
+export async function saveContext(body: string): Promise<WorkspaceContext> {
+  const res = await fetch(`${API_URL}/context`, {
+    method: 'PUT',
+    headers: await authHeaders(),
+    body: JSON.stringify({ body }),
+  });
+  if (!res.ok) throw new Error(`save_context ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { context: WorkspaceContext };
+  return json.context;
+}
+
+export async function listContextProposals(all = false): Promise<ContextProposal[]> {
+  const url = new URL(`${API_URL}/context/proposals`);
+  if (all) url.searchParams.set('all', '1');
+  const res = await fetch(url.toString(), { headers: await authHeaders() });
+  if (!res.ok) throw new Error(`context_proposals ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const json = (await res.json()) as { proposals: ContextProposal[] };
+  return json.proposals;
+}
+
+/** Pide a la IA proponer hechos estables desde tu material reciente. */
+export async function proposeContext(lookbackDays?: number): Promise<{ created: number }> {
+  const res = await fetch(`${API_URL}/context/propose`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+  });
+  if (!res.ok) throw new Error(`propose ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+/** Aceptar una propuesta → se fusiona en la constitución. Devuelve el body nuevo. */
+export async function acceptContextProposal(id: string): Promise<{ body?: string }> {
+  const res = await fetch(`${API_URL}/context/proposals/${id}/accept`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`accept ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}
+
+export async function rejectContextProposal(id: string): Promise<void> {
+  const res = await fetch(`${API_URL}/context/proposals/${id}/reject`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`reject ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
 // ---- Workspaces ---------------------------------------------------------
 
 export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';

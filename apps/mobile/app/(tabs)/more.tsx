@@ -2,6 +2,7 @@ import { useRouter, type Href } from 'expo-router';
 import { ScrollView, StyleSheet, Text, TouchableOpacity } from 'react-native';
 
 const ITEMS: { label: string; route: string }[] = [
+  { label: '🧭  Contexto', route: '/context' },
   { label: '📓  Diario', route: '/diario' },
   { label: '🕸️  Grafo', route: '/grafo' },
   { label: '📅  Agenda', route: '/agenda' },

@@ -40,6 +40,7 @@ export default function TabsLayout() {
       />
 
       {/* Rutas que existen pero no van en la barra (se llegan desde "Más"). */}
+      <Tabs.Screen name="context" options={{ href: null, title: 'Contexto' }} />
       <Tabs.Screen name="settings" options={{ href: null, title: 'Ajustes' }} />
       <Tabs.Screen name="ask" options={{ href: null, title: 'Preguntar' }} />
       <Tabs.Screen name="nodes" options={{ href: null, title: 'Notas' }} />

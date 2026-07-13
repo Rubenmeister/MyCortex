@@ -1,4 +1,5 @@
 import { cohereRerank, embedText, generateText, models } from '@mycortex/ai-core';
+import { buildContextBlock } from '@mycortex/cortex-engine';
 import type { Db } from '@mycortex/db';
 import { MEETING_PREP_SYSTEM_PROMPT } from './prompts.js';
 
@@ -172,7 +173,8 @@ export async function buildMeetingPrep(
           )
           .join('\n');
 
-  const userPrompt = `EVENTO:
+  const contextBlock = await buildContextBlock(db, workspaceId);
+  const userPrompt = `${contextBlock}EVENTO:
 Título: ${event.title}
 Cuándo: ${event.start ?? 's/f'}${event.location ? `\nDónde: ${event.location}` : ''}${event.attendees.length ? `\nAsistentes: ${event.attendees.join(', ')}` : ''}
 Descripción: ${event.description || '(sin descripción)'}
