@@ -3,7 +3,7 @@
 -- tarea": con este link, cuando la tarea se completa el seguimiento puede marcar
 -- la sugerencia como hecha, y la UI puede mostrar "esta sugerencia ya es tarea".
 --
--- NO APLICADA EN PROD todavía — aplicar con `supabase db push` cuando Rubén dé OK.
+-- APLICADA EN PROD el 2026-07-12 (Rubén, vía SQL editor de Supabase).
 
 alter table public.tasks
   add column if not exists source_suggestion_id uuid
