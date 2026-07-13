@@ -15,10 +15,12 @@
   standalone: sin deps `workspace:*`, con su propio `package-lock.json`, EAS lo
   compila con npm sin este `.npmrc`). Red de seguridad para dev local de Metro:
   `apps/mobile/metro.config.js` (resuelve desde app + workspace root).
-- **Bonus**: el auto-deploy Git↔Vercel estaba desconectado (los push no disparaban
-  build). Reconectar en el dashboard de Vercel; mientras tanto, deploy manual con
-  `vercel --prod` desde la RAÍZ del repo (el link vive en `apps/web/.vercel`,
-  Root Directory del proyecto = `apps/web`).
+- **Nota**: la integración Git↔Vercel SÍ estaba conectada todo el tiempo. Los push
+  a main disparaban el deploy, pero **cada build fallaba** (por lo de arriba), así
+  que producción se quedó en el último build bueno de hace ~24 días. No había
+  desconexión; el build era el problema. Con el build arreglado, los push vuelven a
+  auto-desplegar. (Para forzar manualmente: `vercel --prod` desde la RAÍZ del repo;
+  el link vive en `apps/web/.vercel`, Root Directory del proyecto = `apps/web`.)
 
 ## La lección (para otra ocasión)
 "Objects are not valid as a React child ({$$typeof… _owner})" o "useContext null"
