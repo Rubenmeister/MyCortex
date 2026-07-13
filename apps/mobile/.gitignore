@@ -1,5 +1,9 @@
-# Credenciales de submit a tiendas — NUNCA commitear.
-credentials/
+# Credenciales de submit a tiendas — NUNCA commitear la clave.
+# Se ignora cualquier JSON/keystore dentro de credentials/, pero se conserva
+# el README con las instrucciones.
+credentials/*.json
+credentials/*.keystore
+!credentials/README.md
 *.keystore
 google-play-service-account.json
 
