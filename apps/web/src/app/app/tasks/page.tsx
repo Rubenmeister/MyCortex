@@ -125,7 +125,7 @@ export default function TasksPage() {
       <header className="head">
         <div>
           <h1>Tareas ✅</h1>
-          <p className="sub">Tu tablero. Creá a mano o dejá que extraiga los pendientes de tus notas, mails y reuniones.</p>
+          <p className="sub">Tu tablero. Crea a mano o deja que extraiga los pendientes de tus notas, mails y reuniones.</p>
         </div>
         <button type="button" className="btn" disabled={extracting} onClick={runExtract}>
           {extracting ? 'Pensando…' : '✨ Extraer de mi material'}

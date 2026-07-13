@@ -82,7 +82,7 @@ export default function GrafoPage() {
       <header className="head">
         <div>
           <h1>Grafo 🕸️</h1>
-          <p className="sub">Personas, proyectos y temas de tu segundo cerebro. Tocá uno para ver todo sobre él.</p>
+          <p className="sub">Personas, proyectos y temas de tu segundo cerebro. Toca uno para ver todo sobre él.</p>
         </div>
         <button type="button" className="btn" disabled={busy} onClick={build}>
           {busy ? 'Construyendo…' : 'Construir grafo'}
@@ -97,7 +97,7 @@ export default function GrafoPage() {
         <section className="empty">
           <div className="empty-emoji">🕸️</div>
           <div className="empty-title">Tu grafo está vacío</div>
-          <div className="empty-sub">Apretá «Construir grafo» y voy a extraer las entidades de tu material.</div>
+          <div className="empty-sub">Pulsa «Construir grafo» y voy a extraer las entidades de tu material.</div>
         </section>
       )}
 
@@ -132,7 +132,7 @@ export default function GrafoPage() {
 
           <div className="detail-col">
             {detailLoading && <div className="muted">Cargando…</div>}
-            {!detailLoading && !detail && <div className="muted">Elegí una entidad para ver todo sobre ella.</div>}
+            {!detailLoading && !detail && <div className="muted">Elige una entidad para ver todo sobre ella.</div>}
             {!detailLoading && detail && (
               <div>
                 <h2>{TYPE_META[detail.entity.type].emoji} {detail.entity.name}</h2>

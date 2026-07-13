@@ -79,8 +79,8 @@ export default function DiarioPage() {
           <div className="empty-emoji">📖</div>
           <div className="empty-title">Tu diario está vacío</div>
           <div className="empty-sub">
-            Generá el episodio de esta semana y voy a escribir, a partir de tu material, qué pasó y
-            cómo venís. Cada semana se suma uno.
+            Genera el episodio de esta semana y voy a escribir, a partir de tu material, qué pasó y
+            cómo vienes. Cada semana se suma uno.
           </div>
         </section>
       )}

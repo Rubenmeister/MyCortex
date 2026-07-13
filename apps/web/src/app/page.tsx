@@ -39,7 +39,7 @@ export default function HomePage() {
         </h1>
         <p className="lead">
           MyCortex captura todo lo que importa — notas, mails, docs, calendario, voz — y lo
-          convierte en un cerebro consultable. Preguntale cualquier cosa y te responde con tus
+          convierte en un cerebro consultable. Pregúntale cualquier cosa y te responde con tus
           propias fuentes.
         </p>
         <div className="cta-row">
@@ -61,7 +61,7 @@ export default function HomePage() {
         <div className="grid">
           <div className="feat">
             <div className="feat-icon">🧠</div>
-            <h3>Capturás todo</h3>
+            <h3>Capturas todo</h3>
             <p>
               Notas rápidas por web, mobile o Telegram. Voz que se transcribe sola. Drive, Gmail
               y Calendar conectados — todo se indexa con embeddings.
@@ -69,7 +69,7 @@ export default function HomePage() {
           </div>
           <div className="feat">
             <div className="feat-icon">🎯</div>
-            <h3>Recuperás lo justo</h3>
+            <h3>Recuperas lo justo</h3>
             <p>
               Búsqueda híbrida (vector + keyword) con reranker. Te respondemos con tus fuentes
               específicas: "según el mail de X" / "en el doc Y de tu Drive".
@@ -104,14 +104,14 @@ export default function HomePage() {
       </section>
 
       <section className="b2b">
-        <h2 className="section-title">Para vos · Para tu equipo</h2>
+        <h2 className="section-title">Para ti · Para tu equipo</h2>
         <div className="b2b-grid">
           <div className="b2b-card">
             <div className="b2b-tag">PERSONAL</div>
             <h3>Tu cerebro extendido</h3>
             <p>
               Un workspace personal con todas tus fuentes conectadas. Búsqueda híbrida, briefings
-              diarios, citas con origen. Lo que olvidás, MyCortex lo recuerda.
+              diarios, citas con origen. Lo que olvidas, MyCortex lo recuerda.
             </p>
             <ul className="b2b-list">
               <li>Captura por voz (transcripción auto)</li>
@@ -153,7 +153,7 @@ export default function HomePage() {
             <summary>¿Qué pasa con mi contenido si cancelo?</summary>
             <p>
               Lo borramos en 30 días (los backups cifrados rotan en 90 días después
-              de eso). Antes de cancelar podés exportar todo a JSON desde
+              de eso). Antes de cancelar puedes exportar todo a JSON desde
               <em> Configuración → Exportar mi cerebro</em>.
             </p>
           </details>
@@ -186,7 +186,7 @@ export default function HomePage() {
             <p>
               WhatsApp y Notion están en roadmap (Q3 2026). Slack lo skipeamos por ahora
               — vimos que los testers usan WhatsApp y Telegram más. Si Slack es
-              crítico para tu equipo, escribime y lo subimos en prioridad.
+              crítico para tu equipo, escríbeme y lo subimos en prioridad.
             </p>
           </details>
         </div>

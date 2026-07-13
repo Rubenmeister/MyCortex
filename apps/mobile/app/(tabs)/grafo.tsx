@@ -86,7 +86,7 @@ export default function GrafoScreen() {
       {err && <Text style={styles.error}>{err}</Text>}
       {detailBusy && <Text style={styles.muted}>Cargando…</Text>}
       {entities.length === 0 && !busy && (
-        <Text style={styles.muted}>Construí el grafo y aparecen las personas, proyectos y temas de tu material.</Text>
+        <Text style={styles.muted}>Construye el grafo y aparecen las personas, proyectos y temas de tu material.</Text>
       )}
       {entities.map((e) => (
         <TouchableOpacity key={e.id} style={styles.entRow} onPress={() => open(e.id)}>

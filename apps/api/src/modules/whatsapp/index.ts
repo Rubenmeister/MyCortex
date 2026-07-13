@@ -323,10 +323,10 @@ async function processMessage(
       } else {
         const txt =
           result.reason === 'token_expired'
-            ? '⏰ Ese código de vinculación expiró. Generá uno nuevo desde MyCortex web.'
+            ? '⏰ Ese código de vinculación expiró. Genera uno nuevo desde MyCortex web.'
             : result.reason === 'token_already_used'
-              ? '🔁 Ese código ya se usó. Generá uno nuevo desde MyCortex web.'
-              : '❌ Código inválido. Generá uno nuevo desde MyCortex web (Ajustes → Vincular WhatsApp).';
+              ? '🔁 Ese código ya se usó. Genera uno nuevo desde MyCortex web.'
+              : '❌ Código inválido. Genera uno nuevo desde MyCortex web (Ajustes → Vincular WhatsApp).';
         await sendText(msg.from, txt);
       }
       return;
@@ -339,9 +339,9 @@ async function processMessage(
     await sendText(
       msg.from,
       'No estás vinculado a MyCortex.\n\n' +
-        '1. Abrí MyCortex web → Ajustes → Vincular WhatsApp\n' +
+        '1. Abre MyCortex web → Ajustes → Vincular WhatsApp\n' +
         '2. Te genera un código tipo `LINK ABC123`\n' +
-        '3. Pegalo acá tal cual y te queda vinculado.',
+        '3. Pégalo aquí tal cual y te queda vinculado.',
     );
     return;
   }
@@ -364,7 +364,7 @@ async function processMessage(
     // Reuse the existing Whisper helper for transcription.
     const result = await transcribeAudio(buffer, mimeType, { language: 'es' });
     if (!result.text) {
-      await sendText(msg.from, '🎙️ No pude transcribir el audio. Probá de nuevo o mandalo como texto.');
+      await sendText(msg.from, '🎙️ No pude transcribir el audio. Prueba de nuevo o envíalo como texto.');
       return;
     }
     await ingestText(apiUrl, env, identity, result.text);

@@ -84,10 +84,10 @@ export function renderInvitationEmail(args: {
     `${inviter} (${args.inviterEmail}) te invitó a colaborar en el workspace`,
     `"${args.workspaceName}" en MyCortex como ${args.role}.`,
     ``,
-    `Aceptá la invitación acá:`,
+    `Acepta la invitación aquí:`,
     args.acceptUrl,
     ``,
-    `Si no esperabas esta invitación, ignorá este mail.`,
+    `Si no esperabas esta invitación, ignora este mail.`,
     ``,
     `— MyCortex`,
   ].join('\n');
@@ -107,7 +107,7 @@ export function renderInvitationEmail(args: {
       </a>
     </p>
     <p style="font-size:12px;color:#888;margin:24px 0 0;">
-      Si no esperabas esta invitación, ignorá este mail. El link expira en 7 días.
+      Si no esperabas esta invitación, ignora este mail. El link expira en 7 días.
     </p>
     <hr style="border:none;border-top:1px solid #eaeaea;margin:24px 0;">
     <p style="font-size:11px;color:#aaa;margin:0;">

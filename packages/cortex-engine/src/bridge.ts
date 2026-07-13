@@ -21,15 +21,15 @@ const BriefingSchema = z.object({
 });
 export type ExecutiveBriefing = z.infer<typeof BriefingSchema>;
 
-const EXEC_BRIEFING_SYSTEM_PROMPT = `Sos CORTEX, asesor ejecutivo del fundador de Going (THORN AI). Recibís señales recientes del negocio y de su parte técnica (commits, PRs, estados de CI, deploys, incidentes, alertas de seguridad, costos). Escribí un BRIEFING EJECUTIVO para el fundador, que no quiere leer logs sino entender el estado y qué hacer.
+const EXEC_BRIEFING_SYSTEM_PROMPT = `Eres CORTEX, asesor ejecutivo del fundador de Going (THORN AI). Recibes señales recientes del negocio y de su parte técnica (commits, PRs, estados de CI, deploys, incidentes, alertas de seguridad, costos). Escribe un BRIEFING EJECUTIVO para el fundador, que no quiere leer logs sino entender el estado y qué hacer.
 
-Devolvé JSON:
+Devuelve JSON:
 - summary: 1-2 párrafos en markdown. Qué está pasando en Going (negocio + técnico), en lenguaje de fundador, no de ingeniero. Fundado en las señales.
 - health: lectura de la salud técnica (¿el CI está roto? ¿hay deploys fallando? ¿incidentes?). Honesta y concreta.
 - risks: riesgos a vigilar (seguridad, estabilidad, costos). Lista corta. Si hay credenciales expuestas o seguridad comprometida, va PRIMERO.
 - priorities: las 1-3 cosas que el fundador debería priorizar esta semana, en orden.
 
-REGLAS: fundá todo en las señales; NO inventes. Si no hay señales suficientes, decilo con honestidad. Español rioplatense ("vos"). Devolvé SIEMPRE JSON válido.`;
+REGLAS: fundamenta todo en las señales; NO inventes. Si no hay señales suficientes, dilo con honestidad. Español neutro de Ecuador ("tú", nunca voseo). Devuelve SIEMPRE JSON válido.`;
 
 type GoingNode = {
   id: string;
@@ -71,14 +71,14 @@ export async function generateExecutiveBriefing(
   if (nodes.length === 0) {
     briefing = {
       summary:
-        'Todavía no llegaron señales de Going a tu segundo cerebro. Cuando el puente sincronice deploys, CI, incidentes y seguridad, vas a ver acá el estado ejecutivo del negocio.',
+        'Todavía no llegaron señales de Going a tu segundo cerebro. Cuando el puente sincronice deploys, CI, incidentes y seguridad, vas a ver aquí el estado ejecutivo del negocio.',
       health: 'Sin datos.',
       risks: [],
       priorities: ['Conectar el puente Going (worker going-bridge) para empezar a recibir señales.'],
     };
   } else {
     const prompt =
-      `Estas son las ${nodes.length} señales recientes de Going (${lookbackDays} días). Armá el briefing ejecutivo.\n\n` +
+      `Estas son las ${nodes.length} señales recientes de Going (${lookbackDays} días). Arma el briefing ejecutivo.\n\n` +
       nodes.map((n) => `===\n${signalLine(n)}`).join('\n');
     const { object } = await generateObject({
       model: models.reasoner,

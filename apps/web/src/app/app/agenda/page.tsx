@@ -92,7 +92,7 @@ export default function AgendaPage() {
         <div>
           <h1>Agenda 📅</h1>
           <p className="sub">
-            Tus próximos eventos. Pedí «Preparame» y armo un brief con todo lo que tu segundo cerebro
+            Tus próximos eventos. Pide «Prepárame» y armo un brief con todo lo que tu segundo cerebro
             sabe de esa reunión.
           </p>
         </div>
@@ -117,9 +117,9 @@ export default function AgendaPage() {
       {!loading && events.length === 0 && (
         <section className="empty">
           <div className="empty-emoji">🗓️</div>
-          <div className="empty-title">No tenés eventos próximos</div>
+          <div className="empty-title">No tienes eventos próximos</div>
           <div className="empty-sub">
-            Conectá tu Google Calendar en Ajustes › Integraciones y van a aparecer acá.
+            Conecta tu Google Calendar en Ajustes › Integraciones y van a aparecer aquí.
           </div>
         </section>
       )}
@@ -145,7 +145,7 @@ export default function AgendaPage() {
                     disabled={prepBusy === e.nodeId}
                     onClick={() => prep(e.nodeId)}
                   >
-                    {prepBusy === e.nodeId ? 'Pensando…' : p ? 'Regenerar brief' : 'Preparame ✨'}
+                    {prepBusy === e.nodeId ? 'Pensando…' : p ? 'Regenerar brief' : 'Prepárame ✨'}
                   </button>
                 </div>
 

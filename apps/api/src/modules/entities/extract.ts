@@ -13,12 +13,12 @@ const ExtractedSchema = z.object({
   ),
 });
 
-const EXTRACT_SYSTEM = `Sos CORTEX. Extraé las ENTIDADES relevantes del material del usuario: personas, proyectos, organizaciones/empresas, lugares y temas recurrentes. Para cada una devolvé:
-- name: el nombre canónico (consistente; si aparece "Going App" y "Going", usá "Going").
+const EXTRACT_SYSTEM = `Eres CORTEX. Extrae las ENTIDADES relevantes del material del usuario: personas, proyectos, organizaciones/empresas, lugares y temas recurrentes. Para cada una devuelve:
+- name: el nombre canónico (consistente; si aparece "Going App" y "Going", usa "Going").
 - type: persona | proyecto | organizacion | lugar | tema | otro.
 - nodeIds: los ids EXACTOS de los nodos donde aparece.
 
-REGLAS: solo entidades con peso real (no menciones triviales). Unificá variantes del mismo nombre en una sola entidad. NO inventes ids. Match el idioma. Devolvé el array "entities" (vacío si no hay nada).`;
+REGLAS: solo entidades con peso real (no menciones triviales). Unifica variantes del mismo nombre en una sola entidad. NO inventes ids. Match el idioma. Devuelve el array "entities" (vacío si no hay nada).`;
 
 type NodeLite = { id: string; title: string | null; content: string; external_source: string | null };
 
@@ -49,7 +49,7 @@ export async function extractEntities(
   if (nodes.length === 0) return { entities: 0, mentions: 0 };
 
   const prompt =
-    `Extraé las entidades de estos ${nodes.length} ítems.\n\n` +
+    `Extrae las entidades de estos ${nodes.length} ítems.\n\n` +
     nodes
       .map((n) => `===\n[${n.external_source ?? 'nota'}] id=${n.id}\n${n.title ?? ''}\n${n.content.slice(0, 350).replace(/\s+/g, ' ')}`)
       .join('\n');

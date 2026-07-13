@@ -67,7 +67,7 @@ const REWRITE_SYSTEM = `You are a search query optimizer for a personal knowledg
 Rewrite the user's question into a concise retrieval query that:
 - KEEPS ALL proper nouns, names, numbers, dates, acronyms VERBATIM (do not translate or expand company/person names).
 - Adds 1-3 related keywords that would appear in relevant documents (synonyms, alternate phrasings).
-- Removes conversational filler ("me podés decir", "qué onda con", "tengo una duda sobre", etc.).
+- Removes conversational filler ("me puedes decir", "qué onda con", "tengo una duda sobre", etc.).
 - Stays in the SAME language as the input.
 - Outputs ONLY the rewritten query on a single line — no quotes, no explanation, no "Rewritten query:" prefix.
 

@@ -189,7 +189,7 @@ export default function IntegrationsPage() {
           {driveError === 'missing_drive_scope' && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
               No marcaste el permiso para acceder a tu Drive en la pantalla de
-              Google. Click "Conectar Google Drive" de nuevo y asegurate de
+              Google. Click "Conectar Google Drive" de nuevo y asegúrate de
               activar TODOS los permisos que pide.
             </div>
           )}
@@ -206,7 +206,7 @@ export default function IntegrationsPage() {
           {gmailError === 'missing_gmail_scope' && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
               No marcaste el permiso para leer Gmail en la pantalla de Google.
-              Click "Conectar Gmail" de nuevo y activá los permisos.
+              Click "Conectar Gmail" de nuevo y activa los permisos.
             </div>
           )}
         </div>
@@ -222,7 +222,7 @@ export default function IntegrationsPage() {
           {calendarError === 'missing_calendar_scope' && (
             <div style={{ marginTop: 8, fontSize: 12 }}>
               No marcaste el permiso para leer Calendar en la pantalla de Google.
-              Reconectá y activá los permisos.
+              Reconecta y activa los permisos.
             </div>
           )}
         </div>
@@ -286,7 +286,7 @@ export default function IntegrationsPage() {
           <div>
             <div className="provider-name">{PROVIDER_LABEL.gmail}</div>
             <div className="provider-desc">
-              Indexa tus mails. INBOX por defecto, podés agregar otras labels. El
+              Indexa tus mails. INBOX por defecto, puedes agregar otras labels. El
               worker lee bodies, dedup por Message-ID y los hace consultables.
             </div>
           </div>
@@ -634,7 +634,7 @@ function DriveFolders({
         <div className="muted-line">Cargando…</div>
       ) : !sources || sources.length === 0 ? (
         <div className="muted-line">
-          Aún no agregaste carpetas. Agregá una para empezar a indexar tus archivos.
+          Aún no agregaste carpetas. Agrega una para empezar a indexar tus archivos.
         </div>
       ) : (
         <ul className="src-list">
@@ -668,7 +668,7 @@ function DriveFolders({
         <div className="picker-backdrop" onClick={() => setPickerOpen(false)}>
           <div className="picker" onClick={(e) => e.stopPropagation()}>
             <div className="picker-head">
-              <h4>Elegí una carpeta de tu Drive</h4>
+              <h4>Elige una carpeta de tu Drive</h4>
               <button type="button" className="picker-close" onClick={() => setPickerOpen(false)}>
                 ✕
               </button>
@@ -1011,7 +1011,7 @@ function GmailLabels({
         <div className="picker-backdrop" onClick={() => setPickerOpen(false)}>
           <div className="picker" onClick={(e) => e.stopPropagation()}>
             <div className="picker-head">
-              <h4>Elegí una label</h4>
+              <h4>Elige una label</h4>
               <button type="button" className="picker-close" onClick={() => setPickerOpen(false)}>
                 ✕
               </button>
@@ -1354,7 +1354,7 @@ function CalendarsList({
         <div className="picker-backdrop" onClick={() => setPickerOpen(false)}>
           <div className="picker" onClick={(e) => e.stopPropagation()}>
             <div className="picker-head">
-              <h4>Elegí un calendario</h4>
+              <h4>Elige un calendario</h4>
               <button type="button" className="picker-close" onClick={() => setPickerOpen(false)}>
                 ✕
               </button>
@@ -1500,7 +1500,7 @@ function TelegramSection() {
         <div>
           <div className="provider-name">Telegram</div>
           <div className="provider-desc">
-            Mandale texto o audio al bot @MyCortex desde tu Telegram. Cada miembro vincula su propio chat — los mensajes se guardan en su cuenta.
+            Envíale texto o audio al bot @MyCortex desde tu Telegram. Cada miembro vincula su propio chat — los mensajes se guardan en su cuenta.
           </div>
         </div>
       </div>
@@ -1535,7 +1535,7 @@ function TelegramSection() {
         <div className="muted" style={{ marginBottom: 14, fontSize: 13 }}>
           {links === null
             ? 'Cargando…'
-            : 'Aún no tenés Telegram vinculado. Click abajo para empezar.'}
+            : 'Aún no tienes Telegram vinculado. Click abajo para empezar.'}
         </div>
       )}
 
@@ -1561,7 +1561,7 @@ function TelegramSection() {
               </>
             ) : (
               <>
-                El bot no está configurado con username. Abrí el bot y mandá:{' '}
+                El bot no está configurado con username. Abre el bot y envía:{' '}
                 <code>/start {pending.token.slice(0, 20)}…</code>
               </>
             )}
@@ -1687,7 +1687,7 @@ function WhatsAppSection() {
         <div>
           <div className="provider-name">WhatsApp</div>
           <div className="provider-desc">
-            Mandá texto, voz o imágenes al número oficial de MyCortex desde tu WhatsApp. Cada miembro vincula su propio chat.
+            Envía texto, voz o imágenes al número oficial de MyCortex desde tu WhatsApp. Cada miembro vincula su propio chat.
           </div>
         </div>
       </div>
@@ -1733,11 +1733,11 @@ function WhatsAppSection() {
 
       {pending && (
         <div className="wa-pending">
-          <div className="wa-pending-title">📞 Mandá este mensaje desde WhatsApp</div>
+          <div className="wa-pending-title">📞 Envía este mensaje desde WhatsApp</div>
           <div className="wa-pending-step">
             <span className="wa-step-num">1</span>
             <div>
-              <strong>Abrí WhatsApp</strong> en tu teléfono y mandale un mensaje a:
+              <strong>Abre WhatsApp</strong> en tu teléfono y envíale un mensaje a:
               <div className="wa-number">
                 <span>{pending.display_number ?? 'Número de MyCortex (no configurado todavía)'}</span>
                 {pending.display_number && (
@@ -1755,7 +1755,7 @@ function WhatsAppSection() {
           <div className="wa-pending-step">
             <span className="wa-step-num">2</span>
             <div>
-              <strong>Enviá exactamente</strong>:
+              <strong>Envía exactamente</strong>:
               <div className="wa-message">
                 <code>{pending.message_to_send}</code>
                 <button

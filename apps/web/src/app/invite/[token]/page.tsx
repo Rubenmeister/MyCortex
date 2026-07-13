@@ -85,11 +85,11 @@ export default function InvitePage() {
           // disclosing it on token-only guesses), but the FE already has
           // it from the GET above — show that instead.
           throw new Error(
-            `Tu cuenta (${body.your_email ?? '?'}) no coincide con la invitación a ${invitation?.email ?? 'este workspace'}. Salí y entrá con la cuenta correcta.`,
+            `Tu cuenta (${body.your_email ?? '?'}) no coincide con la invitación a ${invitation?.email ?? 'este workspace'}. Sal y entra con la cuenta correcta.`,
           );
         }
         if (body?.error === 'invitation_expired') {
-          throw new Error('Esta invitación expiró. Pedí una nueva al admin.');
+          throw new Error('Esta invitación expiró. Pide una nueva al admin.');
         }
         throw new Error(body?.detail ?? `${res.status}`);
       }
@@ -201,7 +201,7 @@ export default function InvitePage() {
                   <strong>{invitation.email}</strong>.
                 </p>
                 <p className="muted small">
-                  Cerrá sesión y volvé a entrar con la cuenta correcta para aceptar.
+                  Cierra sesión y vuelve a entrar con la cuenta correcta para aceptar.
                 </p>
                 <button
                   type="button"

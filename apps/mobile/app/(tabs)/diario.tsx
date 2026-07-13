@@ -41,7 +41,7 @@ export default function DiarioScreen() {
       {err && <Text style={styles.error}>{err}</Text>}
 
       {episodes.length === 0 && !busy && (
-        <Text style={styles.muted}>Tu diario está vacío. Generá el episodio de esta semana.</Text>
+        <Text style={styles.muted}>Tu diario está vacío. Genera el episodio de esta semana.</Text>
       )}
 
       {episodes.map((e) => (

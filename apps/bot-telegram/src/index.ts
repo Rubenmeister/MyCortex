@@ -45,8 +45,8 @@ async function identityFor(chatId: number): Promise<BotIdentity | null> {
 
 const UNLINKED_HINT =
   'No estás vinculado a una cuenta de MyCortex.\n\n' +
-  '1. Abrí MyCortex web → *Ajustes → Vincular Telegram*\n' +
-  '2. Click el botón "Vincular" y abrí el link aquí\n' +
+  '1. Abre MyCortex web → *Ajustes → Vincular Telegram*\n' +
+  '2. Click el botón "Vincular" y abre el link aquí\n' +
   '3. Vuelvo a estar a tus órdenes';
 
 /**
@@ -119,10 +119,10 @@ bot.start(async (ctx) => {
     }
     const reasonMsg =
       result.reason === 'token_expired'
-        ? '⏰ Ese link de vinculación expiró. Generá uno nuevo desde MyCortex web.'
+        ? '⏰ Ese link de vinculación expiró. Genera uno nuevo desde MyCortex web.'
         : result.reason === 'token_already_used'
-          ? '🔁 Ese link ya se usó. Generá uno nuevo desde MyCortex web.'
-          : '❌ Link de vinculación inválido. Generá uno nuevo desde MyCortex web.';
+          ? '🔁 Ese link ya se usó. Genera uno nuevo desde MyCortex web.'
+          : '❌ Link de vinculación inválido. Genera uno nuevo desde MyCortex web.';
     await ctx.reply(reasonMsg);
     return;
   }

@@ -90,7 +90,7 @@ export default function GoingScreen() {
 
       {err && <Text style={styles.error}>{err}</Text>}
 
-      {!briefing && <Text style={styles.muted}>Conectá un repo y el puente trae sus señales (cada 6h).</Text>}
+      {!briefing && <Text style={styles.muted}>Conecta un repo y el puente trae sus señales (cada 6h).</Text>}
 
       {briefing && (
         <View style={styles.card}>

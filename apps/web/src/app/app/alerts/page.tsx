@@ -140,7 +140,7 @@ export default function AlertsPage() {
           </div>
           <div className="empty-sub">
             {showAll
-              ? 'Cuando entren mails, docs o eventos nuevos, el worker los va a clasificar y vas a verlos acá.'
+              ? 'Cuando entren mails, docs o eventos nuevos, el worker los va a clasificar y vas a verlos aquí.'
               : 'Todas las alertas están resueltas. Buen trabajo.'}
           </div>
         </section>

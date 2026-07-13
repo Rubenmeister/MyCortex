@@ -111,7 +111,7 @@ export default function AppHomePage() {
     {
       key: 'drive',
       done: hasDrive,
-      title: 'Conectá Google Drive',
+      title: 'Conecta Google Drive',
       desc: 'PDFs, Google Docs, Sheets — todo se indexa y se vuelve buscable + citable.',
       href: '/app/settings/integrations',
       cta: 'Conectar',
@@ -120,7 +120,7 @@ export default function AppHomePage() {
     {
       key: 'gmail',
       done: hasGmail,
-      title: 'Conectá Gmail',
+      title: 'Conecta Gmail',
       desc: "Tus mails recientes (90 días INBOX por defecto). Ideal para 'qué me dijo X sobre Y'.",
       href: '/app/settings/integrations',
       cta: 'Conectar',
@@ -129,7 +129,7 @@ export default function AppHomePage() {
     {
       key: 'calendar',
       done: hasCal,
-      title: 'Conectá Google Calendar',
+      title: 'Conecta Google Calendar',
       desc: 'Eventos pasados + próximos. El briefing diario los incluye automáticamente.',
       href: '/app/settings/integrations',
       cta: 'Conectar',
@@ -138,8 +138,8 @@ export default function AppHomePage() {
     {
       key: 'telegram',
       done: hasTelegram,
-      title: 'Vinculá Telegram',
-      desc: 'Mandale audio, fotos o texto al bot y todo entra a tu cerebro. Ideal cuando estás en la calle.',
+      title: 'Vincula Telegram',
+      desc: 'Envíale audio, fotos o texto al bot y todo entra a tu cerebro. Ideal cuando estás en la calle.',
       href: '/app/settings/integrations',
       cta: 'Vincular',
       icon: '📲',
@@ -168,7 +168,7 @@ export default function AppHomePage() {
         )}
         <p className="sub">
           {isNewUser
-            ? 'Conectá tu primera fuente para empezar a usar tu segundo cerebro.'
+            ? 'Conecta tu primera fuente para empezar a usar tu segundo cerebro.'
             : `Tu segundo cerebro tiene ${activeIntegrations.length} fuente${
                 activeIntegrations.length === 1 ? '' : 's'
               } activa${activeIntegrations.length === 1 ? '' : 's'}.`}
@@ -273,7 +273,7 @@ export default function AppHomePage() {
           <div>
             <div className="hint-title">¿Vas a usar MyCortex en equipo?</div>
             <div className="hint-desc">
-              Creá un workspace de equipo para compartir tu segundo cerebro con otros miembros.
+              Crea un workspace de equipo para compartir tu segundo cerebro con otros miembros.
               Cada uno tiene su propio acceso con roles.
             </div>
             <Link href="/app/settings" className="hint-cta">

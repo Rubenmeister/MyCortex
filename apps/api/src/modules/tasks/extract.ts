@@ -22,15 +22,15 @@ export type ExtractedItem = {
   sourceNodeId: string | null;
 };
 
-const EXTRACT_SYSTEM = `Sos CORTEX. Extraé TAREAS ACCIONABLES del material reciente del usuario (notas, mails, eventos). Una tarea accionable es algo concreto que el usuario tiene que HACER.
+const EXTRACT_SYSTEM = `Eres CORTEX. Extrae TAREAS ACCIONABLES del material reciente del usuario (notas, mails, eventos). Una tarea accionable es algo concreto que el usuario tiene que HACER.
 
-Para cada ítem real devolvé: title (imperativo, 1 línea: "Responder a X sobre Y"), detail (contexto breve o null), priority (alta/media/baja según urgencia e impacto), sourceNodeId (el id EXACTO del nodo de donde la sacaste).
+Para cada ítem real devuelve: title (imperativo, 1 línea: "Responder a X sobre Y"), detail (contexto breve o null), priority (alta/media/baja según urgencia e impacto), sourceNodeId (el id EXACTO del nodo de donde la sacaste).
 
 REGLAS:
 - Solo cosas que requieran acción del usuario. NO incluyas: FYI, newsletters, confirmaciones de pagos hechos, OTPs, status normales.
 - NO inventes tareas que no estén respaldadas por el material.
 - Si un nodo no tiene nada accionable, no devuelvas nada para él.
-- Match el idioma del material (probablemente español). Devolvé el array "items" (vacío si no hay nada accionable).`;
+- Match el idioma del material (probablemente español). Devuelve el array "items" (vacío si no hay nada accionable).`;
 
 type NodeLite = {
   id: string;
@@ -66,7 +66,7 @@ export async function extractActionItems(
   if (nodes.length === 0) return [];
 
   const prompt =
-    `Extraé las tareas accionables de estos ${nodes.length} ítems recientes.\n\n` +
+    `Extrae las tareas accionables de estos ${nodes.length} ítems recientes.\n\n` +
     nodes
       .map(
         (n) =>

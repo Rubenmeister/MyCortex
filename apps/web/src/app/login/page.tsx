@@ -61,14 +61,14 @@ function LoginForm() {
 
     if (mode === 'reset') {
       if (!email.trim()) {
-        setErr('Ingresá tu email.');
+        setErr('Ingresa tu email.');
         return;
       }
       setBusy(true);
       const r = await requestPasswordReset(email.trim());
       setBusy(false);
       if (r.error) setErr(r.error);
-      else setInfo('Si ese email tiene cuenta, te enviamos un link para restablecer tu contraseña. Revisá tu bandeja (y el spam).');
+      else setInfo('Si ese email tiene cuenta, te enviamos un link para restablecer tu contraseña. Revisa tu bandeja (y el spam).');
       return;
     }
 
@@ -157,7 +157,7 @@ function LoginForm() {
             setInfo(null);
           }}
         >
-          {isReset ? '← Volver a entrar' : isSignup ? '¿Ya tenés cuenta? Entrá' : '¿Sos nuevo? Creá tu cuenta'}
+          {isReset ? '← Volver a entrar' : isSignup ? '¿Ya tienes cuenta? Entra' : '¿Eres nuevo? Crea tu cuenta'}
         </button>
       </form>
       <style jsx>{`

@@ -100,7 +100,7 @@ export default function ChatPage() {
               void send(input);
             }
           }}
-          placeholder="Escribí un mensaje… (Enter para enviar)"
+          placeholder="Escribe un mensaje… (Enter para enviar)"
           rows={2}
           disabled={sending || !current}
         />

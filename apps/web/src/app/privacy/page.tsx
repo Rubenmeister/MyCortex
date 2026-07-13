@@ -22,12 +22,12 @@ export default function PrivacyPage() {
       <section>
         <h2>El resumen de 30 segundos</h2>
         <ul>
-          <li><strong>Tu contenido es tuyo.</strong> Lo subís, lo borrás cuando querés.</li>
+          <li><strong>Tu contenido es tuyo.</strong> Lo subes, lo borras cuando quieres.</li>
           <li><strong>No vendemos tus datos</strong> a nadie. Nunca.</li>
           <li><strong>No entrenamos modelos públicos</strong> con tu contenido.</li>
           <li>Lo procesamos con OpenAI, Anthropic y Cohere bajo sus acuerdos de
             no-entrenamiento.</li>
-          <li>Pedís borrar todo → en 30 días no queda nada (excepto backups
+          <li>Pides borrar todo → en 30 días no queda nada (excepto backups
             cifrados que rotan en 90 días).</li>
         </ul>
       </section>
@@ -44,14 +44,14 @@ export default function PrivacyPage() {
       <section>
         <h2>Qué datos recogemos</h2>
 
-        <h3>Datos que vos das directamente</h3>
+        <h3>Datos que tú das directamente</h3>
         <ul>
           <li><strong>Cuenta</strong>: email, contraseña (hasheada con bcrypt por
             Supabase Auth, nunca vemos el plaintext).</li>
-          <li><strong>Contenido</strong>: las notas que capturás (texto, voz que
-            transcribimos, fotos), los documentos de Drive que conectás, los mails
+          <li><strong>Contenido</strong>: las notas que capturas (texto, voz que
+            transcribimos, fotos), los documentos de Drive que conectas, los mails
             de Gmail que indexamos, los eventos de Calendar, los mensajes de
-            Telegram o WhatsApp que mandás al bot.</li>
+            Telegram o WhatsApp que envías al bot.</li>
           <li><strong>Workspace</strong>: nombre, miembros, roles, invitaciones.</li>
         </ul>
 
@@ -65,9 +65,9 @@ export default function PrivacyPage() {
 
         <h3>Datos de terceros (vía OAuth)</h3>
         <p>
-          Cuando conectás Google Drive / Gmail / Calendar, Google nos pasa tokens
+          Cuando conectas Google Drive / Gmail / Calendar, Google nos pasa tokens
           de acceso de solo lectura. Esos tokens viven cifrados en Google Secret
-          Manager. Podés revocar el acceso en cualquier momento desde{' '}
+          Manager. Puedes revocar el acceso en cualquier momento desde{' '}
           <a href="https://myaccount.google.com/permissions">Google Account → Permisos</a>.
         </p>
       </section>
@@ -80,7 +80,7 @@ export default function PrivacyPage() {
             respuestas, briefings y alertas.</li>
           <li><strong>Mantener el servicio sano</strong>: detectar abuse, debuggear
             errores, medir performance.</li>
-          <li><strong>Comunicarnos con vos</strong>: emails operacionales
+          <li><strong>Comunicarnos contigo</strong>: emails operacionales
             (confirmación de cuenta, password reset, alertas urgentes). No mandamos
             marketing salvo que te suscribas explícitamente.</li>
         </ol>
@@ -121,20 +121,20 @@ export default function PrivacyPage() {
           <li>Workers + Cloud Storage: <strong>us-east1</strong>.</li>
         </ul>
         <p>
-          Si querés que tus datos vivan en otra región (por ejemplo EU para
-          compliance GDPR), escribinos — estamos planeando soportar
+          Si quieres que tus datos vivan en otra región (por ejemplo EU para
+          compliance GDPR), escríbenos — estamos planeando soportar
           europe-west antes de fin de 2026.
         </p>
       </section>
 
       <section>
         <h2>Tus derechos</h2>
-        <p>Podés en cualquier momento:</p>
+        <p>Puedes en cualquier momento:</p>
         <ul>
-          <li><strong>Ver</strong> qué tenemos sobre vos: descargá tus nodos desde
-            <em> /app/nodes</em> o pedinos un export completo por email.</li>
-          <li><strong>Corregir</strong>: editás tus nodos directamente, o nos
-            avisás de algún dato mal registrado.</li>
+          <li><strong>Ver</strong> qué tenemos sobre ti: descarga tus nodos desde
+            <em> /app/nodes</em> o pídenos un export completo por email.</li>
+          <li><strong>Corregir</strong>: editas tus nodos directamente, o nos
+            avisas de algún dato mal registrado.</li>
           <li><strong>Borrar</strong>: deletear nodos uno por uno, o cancelar tu
             cuenta entera y se borra todo en 30 días.</li>
           <li><strong>Portar</strong>: pediendolo, te damos un JSON con todo tu

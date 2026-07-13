@@ -74,7 +74,7 @@ export default function ChatScreen() {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="Escribí un mensaje…"
+          placeholder="Escribe un mensaje…"
           placeholderTextColor="#666"
           multiline
         />

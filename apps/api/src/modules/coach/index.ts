@@ -230,7 +230,7 @@ export const coachModule: FastifyPluginAsync = async (server) => {
     return reply.code(201).send({ task, alreadyExisted: false });
   });
 
-  /** El perfil que el coach aprendió del usuario ("lo que sé de vos"). */
+  /** El perfil que el coach aprendió del usuario ("lo que sé de ti"). */
   server.get('/profile', async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;

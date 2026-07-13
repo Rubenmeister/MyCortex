@@ -35,7 +35,7 @@ export default function TermsPage() {
       <section>
         <h2>2. Qué es MyCortex</h2>
         <p>
-          Es una herramienta personal y empresarial que indexa contenido que vos elegís
+          Es una herramienta personal y empresarial que indexa contenido que tú eliges
           conectar (correos, documentos, eventos de calendario, mensajes de Telegram o
           WhatsApp) y te permite buscarlo y razonar sobre él con asistencia de
           inteligencia artificial.
@@ -50,9 +50,9 @@ export default function TermsPage() {
       <section>
         <h2>3. Tu cuenta</h2>
         <ul>
-          <li>Tenés que dar un email real y una contraseña de tu propiedad.</li>
-          <li>Sos responsable de mantener tu contraseña segura.</li>
-          <li>Si sospechás acceso no autorizado, avisanos de inmediato a{' '}
+          <li>Tienes que dar un email real y una contraseña de tu propiedad.</li>
+          <li>Eres responsable de mantener tu contraseña segura.</li>
+          <li>Si sospechas acceso no autorizado, avísanos de inmediato a{' '}
             <a href="mailto:rubentorcob@gmail.com">rubentorcob@gmail.com</a>.</li>
           <li>Una cuenta es para una persona. No compartas credenciales.</li>
         </ul>
@@ -65,7 +65,7 @@ export default function TermsPage() {
           En resumen:
         </p>
         <ul>
-          <li>Tu contenido es <strong>tuyo</strong>. Vos lo subís, vos podés borrarlo.</li>
+          <li>Tu contenido es <strong>tuyo</strong>. Tú lo subes, tú puedes borrarlo.</li>
           <li>Lo usamos exclusivamente para generar tus respuestas, briefings y
             alertas — no entrenamos modelos públicos con él.</li>
           <li>Lo procesamos pasándolo a proveedores de IA (OpenAI, Anthropic, Cohere)
@@ -76,9 +76,9 @@ export default function TermsPage() {
       </section>
 
       <section>
-        <h2>5. Qué no podés hacer</h2>
+        <h2>5. Qué no puedes hacer</h2>
         <ul>
-          <li>Subir contenido que no te pertenece o sobre el que no tenés permisos.</li>
+          <li>Subir contenido que no te pertenece o sobre el que no tienes permisos.</li>
           <li>Usar MyCortex para spam, scraping abusivo, o para evadir rate limits
             (tenemos 120 req/min por usuario por una razón).</li>
           <li>Intentar acceder a workspaces o cuentas que no son tuyos.</li>
@@ -96,7 +96,7 @@ export default function TermsPage() {
         <ul>
           <li>Puede haber bugs, lentitud, o features que cambien sin aviso.</li>
           <li>Hacemos backups diarios pero no garantizamos zero data loss durante la
-            beta. Si tenés información crítica, mantenela también en otro lado.</li>
+            beta. Si tienes información crítica, mantenla también en otro lado.</li>
           <li>El servicio puede tener cortes para mantenimiento. Avisamos cuando
             podemos.</li>
         </ul>
@@ -115,7 +115,7 @@ export default function TermsPage() {
       <section>
         <h2>8. Cancelación de cuenta</h2>
         <p>
-          Podés cancelar tu cuenta cuando quieras desde <em>Configuración</em> o
+          Puedes cancelar tu cuenta cuando quieras desde <em>Configuración</em> o
           escribiendo a <a href="mailto:rubentorcob@gmail.com">rubentorcob@gmail.com</a>.
           Al cancelar, borramos tu contenido en 30 días (excepto backups, que se
           rotan en 90 días).
@@ -127,7 +127,7 @@ export default function TermsPage() {
         <p>
           MyCortex se ofrece &quot;tal cual&quot;. No garantizamos que las respuestas
           generadas por IA sean correctas, completas, o adecuadas para una decisión
-          específica. <strong>Validá la información crítica antes de actuar sobre
+          específica. <strong>Valida la información crítica antes de actuar sobre
           ella</strong>, especialmente en temas médicos, legales, o financieros.
         </p>
         <p>
@@ -142,7 +142,7 @@ export default function TermsPage() {
         <p>
           Si cambiamos estos términos de forma sustancial, te avisamos por email con
           al menos 14 días de antelación. Cambios menores (typos, aclaraciones) los
-          publicamos directo acá actualizando la fecha de arriba.
+          publicamos directo aquí actualizando la fecha de arriba.
         </p>
       </section>
 
@@ -157,7 +157,7 @@ export default function TermsPage() {
       <section>
         <h2>12. Contacto</h2>
         <p>
-          ¿Dudas, reclamos, ideas? Escribí a{' '}
+          ¿Dudas, reclamos, ideas? Escribe a{' '}
           <a href="mailto:rubentorcob@gmail.com">rubentorcob@gmail.com</a>. Te
           respondemos personalmente, no hay bot de soporte (todavía).
         </p>

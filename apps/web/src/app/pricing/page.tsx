@@ -38,7 +38,7 @@ export default function PricingPage() {
       <section className="hero">
         <h1>Precios simples.</h1>
         <p className="lead">
-          El personal es gratis para siempre. Pagás cuando necesitás más fuentes, más historial,
+          El personal es gratis para siempre. Pagas cuando necesitas más fuentes, más historial,
           o trabajar en equipo.
         </p>
       </section>
@@ -121,7 +121,7 @@ export default function PricingPage() {
             </p>
           </div>
           <div className="faq-item">
-            <h3>¿Usás mis datos para entrenar IA?</h3>
+            <h3>¿Usas mis datos para entrenar IA?</h3>
             <p>
               No. Los modelos que usamos (OpenAI embeddings, Claude, Cohere rerank) están
               configurados para no retener data. Tus mails y docs nunca entran a un set de
@@ -131,7 +131,7 @@ export default function PricingPage() {
           <div className="faq-item">
             <h3>¿Puedo cancelar cuando quiera?</h3>
             <p>
-              Sí, en cualquier momento. Si cancelás Pro, tu workspace queda en plan Personal (las
+              Sí, en cualquier momento. Si cancelas Pro, tu workspace queda en plan Personal (las
               fuentes pagas se pausan pero los datos siguen ahí).
             </p>
           </div>
@@ -139,7 +139,7 @@ export default function PricingPage() {
             <h3>¿Cómo funcionan los límites de nodos?</h3>
             <p>
               Cada chunk indexado (un párrafo de doc, un mail, un evento) cuenta como un nodo.
-              Cuando llegás al límite del plan, las syncs nuevas se pausan hasta que upgrades o
+              Cuando llegas al límite del plan, las syncs nuevas se pausan hasta que upgrades o
               borres material viejo.
             </p>
           </div>
@@ -147,7 +147,7 @@ export default function PricingPage() {
       </section>
 
       <section className="cta-final">
-        <h2>Empezá gratis. Subí cuando lo necesites.</h2>
+        <h2>Empieza gratis. Sube cuando lo necesites.</h2>
         <Link href="/login" className="btn-big">
           Crear cuenta
         </Link>

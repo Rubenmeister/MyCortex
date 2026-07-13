@@ -44,7 +44,7 @@ export default function AgendaScreen() {
     <ScrollView style={styles.root} contentContainerStyle={styles.body}>
       {err && <Text style={styles.error}>{err}</Text>}
       {events.length === 0 && (
-        <Text style={styles.muted}>No tenés eventos próximos. Conectá tu Google Calendar en Ajustes.</Text>
+        <Text style={styles.muted}>No tienes eventos próximos. Conecta tu Google Calendar en Ajustes.</Text>
       )}
       {events.map((e) => {
         const p = preps[e.nodeId];
@@ -55,7 +55,7 @@ export default function AgendaScreen() {
             {e.location ? <Text style={styles.meta}>📍 {e.location}</Text> : null}
             {e.attendees.length > 0 ? <Text style={styles.meta}>👥 {e.attendees.slice(0, 5).join(', ')}</Text> : null}
             <TouchableOpacity style={styles.prepBtn} onPress={() => prep(e.nodeId)} disabled={prepBusy === e.nodeId}>
-              {prepBusy === e.nodeId ? <ActivityIndicator color="#000" /> : <Text style={styles.prepText}>{p ? 'Regenerar' : 'Preparame ✨'}</Text>}
+              {prepBusy === e.nodeId ? <ActivityIndicator color="#000" /> : <Text style={styles.prepText}>{p ? 'Regenerar' : 'Prepárame ✨'}</Text>}
             </TouchableOpacity>
             {p && (
               <View style={styles.brief}>

@@ -118,7 +118,7 @@ export default function GoingPage() {
           <h1>Going 🚖</h1>
           <p className="sub">
             El cerebro ejecutivo de tu negocio: el estado de Going (deploys, CI, incidentes,
-            seguridad) sintetizado para vos como fundador.
+            seguridad) sintetizado para ti como fundador.
           </p>
         </div>
         <button type="button" className="btn primary" disabled={busy || !current} onClick={regen}>
@@ -134,7 +134,7 @@ export default function GoingPage() {
           <div className="srcs-head">🔗 Fuentes conectadas</div>
           {sources.length === 0 && (
             <div className="srcs-empty">
-              Conectá un repo de GitHub y el puente va a traer sus señales (commits, PRs, CI,
+              Conecta un repo de GitHub y el puente va a traer sus señales (commits, PRs, CI,
               seguridad) cada 6h.
             </div>
           )}
@@ -186,7 +186,7 @@ export default function GoingPage() {
           <div className="empty-title">El puente todavía no recibió señales</div>
           <div className="empty-sub">
             El worker <code>going-bridge</code> sincroniza commits, PRs, CI, incidentes y alertas de
-            seguridad de Going hacia tu segundo cerebro. Una vez configurado y corrido, vas a ver acá
+            seguridad de Going hacia tu segundo cerebro. Una vez configurado y corrido, vas a ver aquí
             tu briefing ejecutivo.
           </div>
         </section>
