@@ -17,6 +17,7 @@ const CreateBody = z.object({
   dueDate: z.string().datetime().nullable().optional(),
   origin: z.enum(['manual', 'coach', 'extracted', 'meeting']).optional(),
   sourceNodeId: z.string().uuid().nullable().optional(),
+  sourceSuggestionId: z.string().uuid().nullable().optional(),
 });
 
 const UpdateBody = z.object({
@@ -65,6 +66,7 @@ export const tasksModule: FastifyPluginAsync = async (server) => {
       due_date: body.data.dueDate ?? null,
       origin: body.data.origin ?? 'manual',
       source_node_id: body.data.sourceNodeId ?? null,
+      source_suggestion_id: body.data.sourceSuggestionId ?? null,
     };
     const { data, error } = await auth.db.from('tasks').insert(insert).select().single();
     if (error) return reply.code(500).send({ error: 'db_error' });
@@ -91,12 +93,25 @@ export const tasksModule: FastifyPluginAsync = async (server) => {
     }
     if (Object.keys(update).length === 0) return reply.code(400).send({ error: 'empty_update' });
 
-    const { error } = await auth.db
+    const { data: updated, error } = await auth.db
       .from('tasks')
       .update(update)
       .eq('id', params.data.id)
-      .eq('workspace_id', auth.workspaceId);
+      .eq('workspace_id', auth.workspaceId)
+      .select('source_suggestion_id')
+      .maybeSingle();
     if (error) return reply.code(500).send({ error: 'db_error' });
+
+    // Cierre del loop: completar una tarea nacida de una sugerencia marca la
+    // sugerencia como hecha, para que el seguimiento del coach lo reconozca.
+    if (body.data.status === 'done' && updated?.source_suggestion_id) {
+      const now = new Date().toISOString();
+      await auth.db
+        .from('coach_suggestions')
+        .update({ status: 'done', done_at: now, read_at: now })
+        .eq('id', updated.source_suggestion_id)
+        .eq('workspace_id', auth.workspaceId);
+    }
     return reply.code(200).send({ ok: true });
   });
 

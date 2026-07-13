@@ -426,11 +426,17 @@ export type CoachGeneration = {
  * workspace. Es una llamada cara (razonamiento Claude sobre el corpus), así
  * que el FE la dispara on-demand, no en cada render.
  */
-export async function getCoachSuggestions(lookbackDays?: number): Promise<CoachGeneration> {
+export async function getCoachSuggestions(
+  lookbackDays?: number,
+  save = false,
+): Promise<CoachGeneration> {
+  const body: Record<string, unknown> = {};
+  if (lookbackDays) body.lookbackDays = lookbackDays;
+  if (save) body.save = true;
   const res = await fetch(`${API_URL}/coach/suggestions`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`coach ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json();
@@ -452,6 +458,9 @@ export type PersistedCoachSuggestion = {
   status: CoachSuggestionStatus;
   snoozed_until: string | null;
   created_at: string;
+  /** Tarea enlazada, si esta sugerencia ya se convirtió en tarea. */
+  task_id: string | null;
+  task_status: TaskStatus | null;
 };
 
 export async function listCoachSuggestions(
@@ -477,6 +486,19 @@ export async function actOnCoachSuggestion(
     body: JSON.stringify({ action, ...(days ? { days } : {}) }),
   });
   if (!res.ok) throw new Error(`coach_action ${res.status}: ${(await res.text()).slice(0, 200)}`);
+}
+
+/**
+ * Convierte una sugerencia persistida en tarea del tablero (cierra el loop
+ * Coach → Productividad). Idempotente: si ya era tarea, devuelve la existente.
+ */
+export async function suggestionToTask(id: string): Promise<{ task: Task; alreadyExisted: boolean }> {
+  const res = await fetch(`${API_URL}/coach/suggestions/${id}/to-task`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`to_task ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
 }
 
 // ---- Coach: perfil que te conoce ----------------------------------------

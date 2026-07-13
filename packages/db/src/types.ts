@@ -469,6 +469,8 @@ export type TaskRow = {
   due_date: string | null;
   origin: TaskOrigin;
   source_node_id: string | null;
+  // Sugerencia del coach que originó la tarea (cierra el loop Coach → Tarea).
+  source_suggestion_id: string | null;
   created_at: string;
   updated_at: string;
   completed_at: string | null;
@@ -485,6 +487,7 @@ export type TaskInsert = {
   due_date?: string | null;
   origin?: TaskOrigin;
   source_node_id?: string | null;
+  source_suggestion_id?: string | null;
   completed_at?: string | null;
 };
 

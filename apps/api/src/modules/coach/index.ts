@@ -8,6 +8,7 @@ import {
   persistCoachGeneration,
   type ChatMessage,
 } from '@mycortex/cortex-engine';
+import type { TaskInsert } from '@mycortex/db/types';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
 
@@ -28,6 +29,19 @@ const ActionBody = z.object({
   /** Para snooze: días a posponer (default 7). */
   days: z.coerce.number().int().min(1).max(60).optional(),
 });
+
+/** Traduce el horizonte de una sugerencia a una fecha límite tentativa. */
+function dueDateForHorizon(horizon: string): string | null {
+  const now = Date.now();
+  if (horizon === 'hoy') {
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 0);
+    return end.toISOString();
+  }
+  if (horizon === 'esta-semana') return new Date(now + 7 * 24 * 3600_000).toISOString();
+  if (horizon === 'este-mes') return new Date(now + 30 * 24 * 3600_000).toISOString();
+  return null;
+}
 
 export const coachModule: FastifyPluginAsync = async (server) => {
   /**
@@ -82,7 +96,29 @@ export const coachModule: FastifyPluginAsync = async (server) => {
     if (!q.data.all) query = query.eq('status', 'pending');
     const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'db_error' });
-    return reply.code(200).send({ suggestions: data ?? [] });
+
+    // Enriquecemos cada sugerencia con su tarea enlazada (si ya la volviste
+    // tarea): así la UI muestra "ya es tarea" y su estado en el tablero.
+    const suggestions = (data ?? []) as Array<
+      Record<string, unknown> & { id: string }
+    >;
+    if (suggestions.length > 0) {
+      const ids = suggestions.map((s) => s.id);
+      const { data: linked } = await auth.db
+        .from('tasks')
+        .select('id, status, source_suggestion_id')
+        .eq('workspace_id', auth.workspaceId)
+        .in('source_suggestion_id', ids);
+      const bySuggestion = new Map(
+        (linked ?? []).map((t) => [t.source_suggestion_id as string, t]),
+      );
+      for (const s of suggestions) {
+        const t = bySuggestion.get(s.id);
+        s.task_id = t?.id ?? null;
+        s.task_status = t?.status ?? null;
+      }
+    }
+    return reply.code(200).send({ suggestions });
   });
 
   /**
@@ -139,6 +175,59 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       .eq('workspace_id', auth.workspaceId);
     if (error) return reply.code(500).send({ error: 'db_error' });
     return reply.code(200).send({ ok: true });
+  });
+
+  /**
+   * Cierra el eslabón "Productividad lo vuelve tarea": convierte una sugerencia
+   * persistida en una tarea del tablero, mapeando action→título, insight→detalle,
+   * horizon→due_date (hoy/esta-semana/este-mes → hoy/+7d/+30d) para que la Agenda
+   * la ubique. Idempotente: si la sugerencia ya tiene tarea, devuelve esa.
+   */
+  server.post('/suggestions/:id/to-task', async (req, reply) => {
+    const auth = await requireAuth(req, reply);
+    if (!auth) return;
+    const params = ActionParams.safeParse(req.params);
+    if (!params.success) return reply.code(400).send({ error: 'invalid_id' });
+
+    const { data: sug, error: sugErr } = await auth.db
+      .from('coach_suggestions')
+      .select('*')
+      .eq('id', params.data.id)
+      .eq('workspace_id', auth.workspaceId)
+      .maybeSingle();
+    if (sugErr) return reply.code(500).send({ error: 'db_error' });
+    if (!sug) return reply.code(404).send({ error: 'suggestion_not_found' });
+
+    // Idempotencia: si ya se convirtió, devolver la tarea existente.
+    const { data: existing } = await auth.db
+      .from('tasks')
+      .select('*')
+      .eq('workspace_id', auth.workspaceId)
+      .eq('source_suggestion_id', sug.id)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    if (existing && existing.length > 0) {
+      return reply.code(200).send({ task: existing[0], alreadyExisted: true });
+    }
+
+    const insert: TaskInsert = {
+      workspace_id: auth.workspaceId,
+      user_id: auth.userId,
+      title: sug.action.slice(0, 300),
+      detail: sug.insight ? sug.insight.slice(0, 2000) : null,
+      priority: sug.priority,
+      origin: 'coach',
+      source_node_id: sug.source_node_ids?.[0] ?? null,
+      source_suggestion_id: sug.id,
+      due_date: dueDateForHorizon(sug.horizon),
+    };
+    const { data: task, error: taskErr } = await auth.db
+      .from('tasks')
+      .insert(insert)
+      .select()
+      .single();
+    if (taskErr) return reply.code(500).send({ error: 'db_error' });
+    return reply.code(201).send({ task, alreadyExisted: false });
   });
 
   /** El perfil que el coach aprendió del usuario ("lo que sé de vos"). */

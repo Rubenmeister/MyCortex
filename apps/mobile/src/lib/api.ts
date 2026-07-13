@@ -163,13 +163,63 @@ export async function refreshCoachProfile(): Promise<CoachProfile> {
   return json.profile;
 }
 
-export async function generateCoach(lookbackDays?: number): Promise<CoachGeneration> {
+export async function generateCoach(lookbackDays?: number, save = false): Promise<CoachGeneration> {
+  const body: Record<string, unknown> = {};
+  if (lookbackDays) body.lookbackDays = lookbackDays;
+  if (save) body.save = true;
   const res = await fetch(`${API_URL}/coach/suggestions`, {
     method: 'POST',
     headers: await authHeaders(),
-    body: JSON.stringify(lookbackDays ? { lookbackDays } : {}),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`coach ${res.status}: ${await res.text()}`);
+  return res.json();
+}
+
+// Sugerencias persistidas (bandeja de seguimiento) + su ciclo de vida.
+export type CoachSuggestionStatus = 'pending' | 'done' | 'dismissed' | 'snoozed';
+
+export type PersistedCoachSuggestion = {
+  id: string;
+  domain: GrowthDomain;
+  title: string;
+  insight: string;
+  action: string;
+  horizon: 'hoy' | 'esta-semana' | 'este-mes';
+  priority: 'alta' | 'media' | 'baja';
+  status: CoachSuggestionStatus;
+  task_id: string | null;
+  task_status: 'todo' | 'doing' | 'done' | null;
+};
+
+export async function listCoachSuggestions(): Promise<PersistedCoachSuggestion[]> {
+  const res = await fetch(`${API_URL}/coach/suggestions/list?limit=100`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`coach_list ${res.status}`);
+  const json = (await res.json()) as { suggestions: PersistedCoachSuggestion[] };
+  return json.suggestions;
+}
+
+export async function actOnCoachSuggestion(
+  id: string,
+  action: 'done' | 'dismiss' | 'snooze' | 'reopen',
+): Promise<void> {
+  const res = await fetch(`${API_URL}/coach/suggestions/${id}/action`, {
+    method: 'POST',
+    headers: await authHeaders(),
+    body: JSON.stringify({ action }),
+  });
+  if (!res.ok) throw new Error(`coach_action ${res.status}`);
+}
+
+/** Convierte una sugerencia persistida en tarea del tablero (idempotente). */
+export async function suggestionToTask(id: string): Promise<{ task: Task; alreadyExisted: boolean }> {
+  const res = await fetch(`${API_URL}/coach/suggestions/${id}/to-task`, {
+    method: 'POST',
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`to_task ${res.status}`);
   return res.json();
 }
 

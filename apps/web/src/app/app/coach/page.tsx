@@ -2,13 +2,16 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  actOnCoachSuggestion,
   getCoachProfile,
   getCoachSuggestions,
+  listCoachSuggestions,
   refreshCoachProfile,
+  suggestionToTask,
   type CoachGeneration,
   type CoachProfile,
-  type CoachSuggestion,
   type GrowthDomain,
+  type PersistedCoachSuggestion,
 } from '../../../lib/api';
 import { useWorkspace } from '../../../lib/workspace';
 
@@ -24,16 +27,21 @@ const DOMAIN_META: Record<GrowthDomain, { label: string; emoji: string; color: s
   otro: { label: 'Otro', emoji: '•', color: '#9aa' },
 };
 
-const PRIORITY_RANK: Record<CoachSuggestion['priority'], number> = { alta: 0, media: 1, baja: 2 };
-const PRIORITY_META: Record<CoachSuggestion['priority'], { label: string; color: string }> = {
+const PRIORITY_RANK: Record<PersistedCoachSuggestion['priority'], number> = { alta: 0, media: 1, baja: 2 };
+const PRIORITY_META: Record<PersistedCoachSuggestion['priority'], { label: string; color: string }> = {
   alta: { label: 'ALTA', color: '#ff9b9b' },
   media: { label: 'MEDIA', color: '#fb6' },
   baja: { label: 'BAJA', color: '#9bc' },
 };
-const HORIZON_LABEL: Record<CoachSuggestion['horizon'], string> = {
+const HORIZON_LABEL: Record<PersistedCoachSuggestion['horizon'], string> = {
   hoy: 'Hoy',
   'esta-semana': 'Esta semana',
   'este-mes': 'Este mes',
+};
+const TASK_STATUS_LABEL: Record<string, string> = {
+  todo: 'por hacer',
+  doing: 'en curso',
+  done: 'hecha',
 };
 
 const LOOKBACKS = [
@@ -44,12 +52,28 @@ const LOOKBACKS = [
 
 export default function CoachPage() {
   const { current } = useWorkspace();
-  const [data, setData] = useState<CoachGeneration | null>(null);
+  const [generation, setGeneration] = useState<CoachGeneration | null>(null);
+  const [inbox, setInbox] = useState<PersistedCoachSuggestion[]>([]);
+  const [inboxLoading, setInboxLoading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lookback, setLookback] = useState(45);
   const [profile, setProfile] = useState<CoachProfile | null>(null);
   const [profileBusy, setProfileBusy] = useState(false);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const loadInbox = useCallback(async () => {
+    setInboxLoading(true);
+    try {
+      const rows = await listCoachSuggestions({ limit: 100 });
+      rows.sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]);
+      setInbox(rows);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setInboxLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (!current) return;
@@ -59,10 +83,11 @@ export default function CoachPage() {
         if (!cancelled) setProfile(p);
       })
       .catch(() => undefined);
+    loadInbox();
     return () => {
       cancelled = true;
     };
-  }, [current]);
+  }, [current, loadInbox]);
 
   const refreshProfile = useCallback(async () => {
     setProfileBusy(true);
@@ -81,20 +106,51 @@ export default function CoachPage() {
       setLoading(true);
       setError(null);
       try {
-        const out = await getCoachSuggestions(days);
-        setData(out);
+        // save:true persiste las sugerencias para que tengan id y entren a la
+        // bandeja de seguimiento (donde se pueden volver tarea).
+        const out = await getCoachSuggestions(days, true);
+        setGeneration(out);
+        await loadInbox();
       } catch (err) {
         setError(String(err));
       } finally {
         setLoading(false);
       }
     },
-    [],
+    [loadInbox],
   );
 
-  const suggestions = data
-    ? [...data.result.suggestions].sort((a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority])
-    : [];
+  const convertToTask = useCallback(async (s: PersistedCoachSuggestion) => {
+    setBusyId(s.id);
+    setError(null);
+    try {
+      const { task } = await suggestionToTask(s.id);
+      setInbox((prev) =>
+        prev.map((it) => (it.id === s.id ? { ...it, task_id: task.id, task_status: task.status } : it)),
+      );
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setBusyId(null);
+    }
+  }, []);
+
+  const act = useCallback(
+    async (s: PersistedCoachSuggestion, action: 'done' | 'dismiss' | 'snooze') => {
+      setBusyId(s.id);
+      setError(null);
+      try {
+        await actOnCoachSuggestion(s.id, action, action === 'snooze' ? 7 : undefined);
+        // La bandeja muestra solo pendientes → sale de la lista.
+        setInbox((prev) => prev.filter((it) => it.id !== s.id));
+      } catch (err) {
+        setError(String(err));
+      } finally {
+        setBusyId(null);
+      }
+    },
+    [],
+  );
 
   return (
     <div className="page">
@@ -103,14 +159,15 @@ export default function CoachPage() {
           <h1>Coach 🎯</h1>
           <p className="sub">
             Tu mentor de crecimiento. Lee tus notas, mails, docs y eventos, y te propone cómo mejorar
-            en salud, ejercicio, proyectos y productividad — fundado en lo que ya sabe de vos.
+            en salud, ejercicio, proyectos y productividad — fundado en lo que ya sabe de ti. Cada
+            sugerencia la puedes volver una tarea con un clic.
           </p>
         </div>
       </header>
 
       <section className="profile">
         <div className="profile-head">
-          <span className="profile-tag">🧠 Lo que sé de vos</span>
+          <span className="profile-tag">🧠 Lo que sé de ti</span>
           <button type="button" className="lb" disabled={profileBusy || !current} onClick={refreshProfile}>
             {profileBusy ? 'Aprendiendo…' : profile && profile.summary ? 'Actualizar' : 'Construir perfil'}
           </button>
@@ -130,8 +187,8 @@ export default function CoachPage() {
           </div>
         ) : (
           <p className="profile-empty">
-            Todavía no aprendí tu perfil. Apretá «Construir perfil» y voy a leer tu material para
-            conocerte: en qué andás, tus metas, rutinas y tendencias en el tiempo.
+            Todavía no aprendí tu perfil. Pulsa «Construir perfil» y voy a leer tu material para
+            conocerte: en qué andas, tus metas, rutinas y tendencias en el tiempo.
           </p>
         )}
       </section>
@@ -157,11 +214,19 @@ export default function CoachPage() {
           disabled={loading || !current}
           onClick={() => generate(lookback)}
         >
-          {loading ? 'Pensando…' : data ? 'Regenerar' : 'Generar mis sugerencias'}
+          {loading ? 'Pensando…' : 'Generar nuevas sugerencias'}
         </button>
       </div>
 
       {error && <div className="err">{error}</div>}
+
+      {generation && !loading && (
+        <section className="focus-card">
+          <div className="focus-tag">⭐ Tu foco de la semana</div>
+          <div className="focus-text">{generation.result.focus}</div>
+          <p className="summary">{generation.result.summary}</p>
+        </section>
+      )}
 
       {loading && (
         <section className="empty">
@@ -174,85 +239,87 @@ export default function CoachPage() {
         </section>
       )}
 
-      {!loading && !data && (
+      <div className="inbox-head">
+        <span className="inbox-tag">🔁 Seguimiento — sugerencias pendientes</span>
+        {inbox.length > 0 && <span className="inbox-count">{inbox.length}</span>}
+      </div>
+
+      {!loading && inbox.length === 0 && (
         <section className="empty">
           <div className="empty-emoji">🎯</div>
-          <div className="empty-title">Listo para tu coaching</div>
+          <div className="empty-title">{inboxLoading ? 'Cargando…' : 'Sin sugerencias pendientes'}</div>
           <div className="empty-sub">
-            Apretá «Generar mis sugerencias» y voy a revisar tu segundo cerebro para proponerte
-            acciones concretas de mejora. Cuanto más material tengas conectado, mejor el análisis.
+            Pulsa «Generar nuevas sugerencias» y voy a revisar tu segundo cerebro para proponerte
+            acciones concretas. Cada lunes también genero un lote automático.
           </div>
         </section>
       )}
 
-      {!loading && data && (
-        <>
-          <section className="focus-card">
-            <div className="focus-tag">⭐ Tu foco de la semana</div>
-            <div className="focus-text">{data.result.focus}</div>
-            <p className="summary">{data.result.summary}</p>
-          </section>
+      {inbox.length > 0 && (
+        <ul className="list">
+          {inbox.map((s) => {
+            const dm = DOMAIN_META[s.domain] ?? DOMAIN_META.otro;
+            const pm = PRIORITY_META[s.priority];
+            const busy = busyId === s.id;
+            const isTask = Boolean(s.task_id);
+            return (
+              <li key={s.id} className="card">
+                <div className="card-head">
+                  <span className="domain-chip" style={{ color: dm.color, borderColor: dm.color }}>
+                    {dm.emoji} {dm.label}
+                  </span>
+                  <span className="priority" style={{ color: pm.color }}>
+                    ● {pm.label}
+                  </span>
+                  <span className="horizon">{HORIZON_LABEL[s.horizon]}</span>
+                </div>
+                <div className="card-title">{s.title}</div>
+                <p className="insight">{s.insight}</p>
+                <div className="action">
+                  <span className="action-tag">→ Próximo paso</span>
+                  {s.action}
+                </div>
+                <div className="card-actions">
+                  {isTask ? (
+                    <span className="in-tasks">
+                      ✓ En tareas{s.task_status ? ` · ${TASK_STATUS_LABEL[s.task_status] ?? s.task_status}` : ''}
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="act primary"
+                      disabled={busy}
+                      onClick={() => convertToTask(s)}
+                    >
+                      {busy ? '…' : '＋ Convertir en tarea'}
+                    </button>
+                  )}
+                  <button type="button" className="act" disabled={busy} onClick={() => act(s, 'done')}>
+                    ✓ Hecho
+                  </button>
+                  <button type="button" className="act ghost" disabled={busy} onClick={() => act(s, 'snooze')}>
+                    ⏰ Posponer
+                  </button>
+                  <button type="button" className="act ghost" disabled={busy} onClick={() => act(s, 'dismiss')}>
+                    ✕ Descartar
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
-          {suggestions.length === 0 ? (
-            <section className="empty">
-              <div className="empty-emoji">🌱</div>
-              <div className="empty-title">Todavía no hay suficiente para coachear</div>
-              <div className="empty-sub">
-                Cargá más notas sobre tus proyectos y metas (o conectá Gmail/Drive/Calendar) y volvé
-                a generar.
-              </div>
-            </section>
-          ) : (
-            <ul className="list">
-              {suggestions.map((s, i) => {
-                const dm = DOMAIN_META[s.domain] ?? DOMAIN_META.otro;
-                const pm = PRIORITY_META[s.priority];
-                const cited = s.sourceNodeIds
-                  .map((id) => data.citedNodes[id])
-                  .filter(Boolean);
-                return (
-                  <li key={i} className="card">
-                    <div className="card-head">
-                      <span className="domain-chip" style={{ color: dm.color, borderColor: dm.color }}>
-                        {dm.emoji} {dm.label}
-                      </span>
-                      <span className="priority" style={{ color: pm.color }}>
-                        ● {pm.label}
-                      </span>
-                      <span className="horizon">{HORIZON_LABEL[s.horizon]}</span>
-                    </div>
-                    <div className="card-title">{s.title}</div>
-                    <p className="insight">{s.insight}</p>
-                    <div className="action">
-                      <span className="action-tag">→ Próximo paso</span>
-                      {s.action}
-                    </div>
-                    {cited.length > 0 && (
-                      <div className="sources">
-                        <span className="src-tag">Basado en:</span>
-                        {cited.map((c, j) => (
-                          <span key={j} className="src" title={c!.snippet}>
-                            {c!.origin} › {c!.title ?? c!.snippet.slice(0, 40)}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-
-          <div className="meta">
-            Analicé {data.meta.nodesAnalyzed} ítems de los últimos {data.meta.lookbackDays} días ·{' '}
-            {new Date(data.meta.generatedAt).toLocaleString(undefined, {
-              day: 'numeric',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-          </div>
-        </>
+      {generation && !loading && (
+        <div className="meta">
+          Analicé {generation.meta.nodesAnalyzed} ítems de los últimos {generation.meta.lookbackDays} días ·{' '}
+          {new Date(generation.meta.generatedAt).toLocaleString(undefined, {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+        </div>
       )}
 
       <style jsx>{`
@@ -289,6 +356,9 @@ export default function CoachPage() {
         .focus-tag { color: #f7d774; font-size: 12px; font-weight: 700; letter-spacing: 0.4px; margin-bottom: 8px; }
         .focus-text { color: #fff; font-size: 17px; font-weight: 600; line-height: 1.45; margin-bottom: 12px; }
         .summary { color: #aaa; font-size: 14px; line-height: 1.55; margin: 0; }
+        .inbox-head { display: flex; align-items: center; gap: 8px; margin: 8px 0 12px; }
+        .inbox-tag { color: #9bd0e0; font-size: 12px; font-weight: 700; letter-spacing: 0.3px; }
+        .inbox-count { background: #14141c; border: 1px solid #1f2a30; color: #9bd0e0; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 1px 9px; }
         .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px; }
         .card { background: #0f0f16; border: 1px solid #1a1a22; border-radius: 12px; padding: 16px 18px; }
         .card-head { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; font-size: 11px; }
@@ -299,9 +369,14 @@ export default function CoachPage() {
         .insight { color: #bbb; font-size: 14px; line-height: 1.55; margin: 0 0 12px; }
         .action { color: #e6e6e6; font-size: 14px; line-height: 1.5; background: rgba(255,255,255,0.03); border-left: 2px solid #3a3a4a; padding: 10px 12px; border-radius: 6px; }
         .action-tag { display: block; color: #8ab4f8; font-size: 11px; font-weight: 700; margin-bottom: 4px; }
-        .sources { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
-        .src-tag { color: #666; font-size: 11px; }
-        .src { color: #888; font-size: 11px; background: #14141c; border: 1px solid #1f1f2a; border-radius: 6px; padding: 2px 8px; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 14px; }
+        .act { border: 1px solid #2a2a3a; color: #ccc; background: transparent; padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .act:hover { border-color: #3a3a4a; color: #fff; }
+        .act.primary { background: #8ab4f8; border-color: #8ab4f8; color: #0a0a0a; }
+        .act.primary:hover { opacity: 0.9; }
+        .act.ghost { color: #888; }
+        .act:disabled { opacity: 0.5; cursor: not-allowed; }
+        .in-tasks { color: #7fd6a6; font-size: 12px; font-weight: 700; background: rgba(127,214,166,0.08); border: 1px solid rgba(127,214,166,0.25); border-radius: 8px; padding: 6px 12px; }
         .meta { color: #555; font-size: 11px; text-align: center; margin-top: 24px; }
       `}</style>
     </div>
