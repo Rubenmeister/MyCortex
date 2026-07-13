@@ -1,0 +1,10 @@
+# Credenciales de submit a tiendas — NUNCA commitear.
+credentials/
+*.keystore
+google-play-service-account.json
+
+# Expo / EAS
+.expo/
+dist/
+web-build/
+*.orig.*

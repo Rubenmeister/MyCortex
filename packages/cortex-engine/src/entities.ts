@@ -26,6 +26,9 @@ type NodeLite = { id: string; title: string | null; content: string; external_so
  * Extrae entidades de los nodos recientes y construye el grafo: upsert de
  * entities (unificadas por nombre) + entity_mentions (entity <-> node). Devuelve
  * cuántas entidades y menciones se tocaron.
+ *
+ * Vive en el package (no en la api) para que lo reusen el endpoint on-demand
+ * (`POST /entities/extract`) y el worker programado (`cortex-entities`).
  */
 export async function extractEntities(
   db: Db,

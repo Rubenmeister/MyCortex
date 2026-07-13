@@ -1,8 +1,8 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { extractEntities } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
-import { extractEntities } from './extract.js';
 
 const ListQuery = z.object({
   type: z.enum(['persona', 'proyecto', 'organizacion', 'lugar', 'tema', 'otro']).optional(),
