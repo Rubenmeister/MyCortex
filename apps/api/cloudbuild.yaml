@@ -86,7 +86,10 @@ steps:
       # the api boots fine and the integration shows as "not configured".
       # Create them manually when Meta Business is set up:
       #   gcloud secrets create mycortex-whatsapp-token / -phone-id / -verify / -app-secret
-      - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,TAVILY_API_KEY=mycortex-tavily:latest,GOOGLE_OAUTH_CLIENT_ID=mycortex-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=mycortex-google-oauth-client-secret:latest,COHERE_API_KEY=mycortex-cohere:latest,RESEND_API_KEY=mycortex-resend:latest,WHATSAPP_ACCESS_TOKEN=mycortex-whatsapp-token:latest,WHATSAPP_PHONE_NUMBER_ID=mycortex-whatsapp-phone-id:latest,WHATSAPP_VERIFY_TOKEN=mycortex-whatsapp-verify:latest,WHATSAPP_APP_SECRET=mycortex-whatsapp-app-secret:latest
+      # SENTRY_DSN: sin esto Sentry queda INERTE (el código está instrumentado y
+      # el env schema lo conoce, pero nunca llegaba al servicio). El secret ya
+      # existía con un DSN real — solo faltaba montarlo aquí.
+      - --set-secrets=OPENAI_API_KEY=mycortex-openai:latest,ANTHROPIC_API_KEY=mycortex-anthropic:latest,SUPABASE_SERVICE_ROLE_KEY=mycortex-supabase-service:latest,TAVILY_API_KEY=mycortex-tavily:latest,GOOGLE_OAUTH_CLIENT_ID=mycortex-google-oauth-client-id:latest,GOOGLE_OAUTH_CLIENT_SECRET=mycortex-google-oauth-client-secret:latest,COHERE_API_KEY=mycortex-cohere:latest,RESEND_API_KEY=mycortex-resend:latest,SENTRY_DSN=mycortex-sentry-dsn-api:latest,WHATSAPP_ACCESS_TOKEN=mycortex-whatsapp-token:latest,WHATSAPP_PHONE_NUMBER_ID=mycortex-whatsapp-phone-id:latest,WHATSAPP_VERIFY_TOKEN=mycortex-whatsapp-verify:latest,WHATSAPP_APP_SECRET=mycortex-whatsapp-app-secret:latest
 
 images:
   - us-east1-docker.pkg.dev/$PROJECT_ID/${_REPO}/${_SERVICE}:$BUILD_ID
