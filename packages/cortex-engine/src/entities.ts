@@ -36,7 +36,7 @@ export async function extractEntities(
   workspaceId: string,
   userId: string,
   opts: { lookbackDays?: number; maxNodes?: number } = {},
-): Promise<{ entities: number; mentions: number }> {
+): Promise<{ entities: number; mentions: number; failedChunks: number }> {
   const lookbackDays = opts.lookbackDays ?? 30;
   const maxNodes = opts.maxNodes ?? 80;
   const since = new Date(Date.now() - lookbackDays * 24 * 3600_000).toISOString();
@@ -50,27 +50,55 @@ export async function extractEntities(
     .limit(maxNodes);
   if (error) throw new Error(`entities_fetch_failed:${error.message}`);
   const nodes = (data as NodeLite[] | null) ?? [];
-  if (nodes.length === 0) return { entities: 0, mentions: 0 };
+  if (nodes.length === 0) return { entities: 0, mentions: 0, failedChunks: 0 };
 
-  const prompt =
-    `Extrae las entidades de estos ${nodes.length} ítems.\n\n` +
-    nodes
-      .map((n) => `===\n[${n.external_source ?? 'nota'}] id=${n.id}\n${n.title ?? ''}\n${n.content.slice(0, 350).replace(/\s+/g, ' ')}`)
-      .join('\n');
+  // Por LOTES, no los 80 nodos de un saque.
+  //
+  // Antes iba en UNA llamada con maxTokens: 4000. El workspace de Ruben (el mas
+  // denso) fallo con AI_NoObjectGeneratedError TODOS los dias desde al menos el
+  // 13-jul: el modelo intenta emitir las entidades de 80 items, se pasa del tope
+  // de salida, el JSON sale cortado y no valida el schema. Se perdia el dia
+  // ENTERO de entidades, en silencio — el `errors=2` estaba en los logs y nadie
+  // lo miraba. No era culpa del modelo: pasaba igual con Sonnet.
+  //
+  // Con lotes la salida de cada llamada cabe holgada, y un lote que falle solo
+  // se lleva sus 20 nodos en vez de los 80.
+  const CHUNK_SIZE = 20;
+  const extracted: { name: string; type: string; nodeIds: string[] }[] = [];
+  let failedChunks = 0;
 
-  const { object, usage } = await generateObject({
-    model: models.reasoner,
-    schema: ExtractedSchema,
-    system: EXTRACT_SYSTEM,
-    prompt,
-    maxTokens: 4000,
-  });
-  void meterAi(db, workspaceId, models.reasoner.modelId, usage);
+  for (let i = 0; i < nodes.length; i += CHUNK_SIZE) {
+    const chunk = nodes.slice(i, i + CHUNK_SIZE);
+    const prompt =
+      `Extrae las entidades de estos ${chunk.length} items.\n\n` +
+      chunk
+        .map(
+          (n) =>
+            `===\n[${n.external_source ?? 'nota'}] id=${n.id}\n${n.title ?? ''}\n${n.content
+              .slice(0, 350)
+              .replace(/\s+/g, ' ')}`,
+        )
+        .join('\n');
+    try {
+      const { object, usage } = await generateObject({
+        model: models.reasoner,
+        schema: ExtractedSchema,
+        system: EXTRACT_SYSTEM,
+        prompt,
+        maxTokens: 4000,
+      });
+      void meterAi(db, workspaceId, models.reasoner.modelId, usage);
+      extracted.push(...object.entities);
+    } catch {
+      // Un lote perdido no puede tumbar la corrida entera.
+      failedChunks++;
+    }
+  }
 
   const validIds = new Set(nodes.map((n) => n.id));
-  // Unificamos por nombre (case-insensitive), mergeando nodeIds válidos.
+  // Unificamos por nombre (case-insensitive), mergeando nodeIds validos.
   const merged = new Map<string, { name: string; type: EntityType; nodeIds: Set<string> }>();
-  for (const e of object.entities) {
+  for (const e of extracted) {
     const key = e.name.trim().toLowerCase();
     if (!key) continue;
     const cur = merged.get(key) ?? { name: e.name.trim(), type: e.type as EntityType, nodeIds: new Set<string>() };
@@ -79,7 +107,7 @@ export async function extractEntities(
   }
 
   const withMentions = [...merged.values()].filter((e) => e.nodeIds.size > 0);
-  if (withMentions.length === 0) return { entities: 0, mentions: 0 };
+  if (withMentions.length === 0) return { entities: 0, mentions: 0, failedChunks };
 
   const entityRows: EntityInsert[] = withMentions.map((e) => ({
     workspace_id: workspaceId,
@@ -115,5 +143,5 @@ export async function extractEntities(
     await db.from('entities').update({ mention_count: count ?? 0 }).eq('id', eid);
   }
 
-  return { entities: entityRows.length, mentions: mentionRows.length };
+  return { entities: entityRows.length, mentions: mentionRows.length, failedChunks };
 }

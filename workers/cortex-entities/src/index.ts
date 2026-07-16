@@ -46,15 +46,21 @@ async function main(): Promise<void> {
     return;
   }
 
-  const totals = { workspaces: 0, withEntities: 0, entities: 0, mentions: 0, errors: 0 };
+  const totals = { workspaces: 0, withEntities: 0, entities: 0, mentions: 0, errors: 0, failedChunks: 0 };
 
   for (const ws of workspaces) {
     totals.workspaces++;
     try {
-      const { entities, mentions } = await extractEntities(db, ws.id, ws.owner_id, {
+      const { entities, mentions, failedChunks } = await extractEntities(db, ws.id, ws.owner_id, {
         lookbackDays: cfg.ENTITIES_LOOKBACK_DAYS,
         maxNodes: cfg.ENTITIES_MAX_NODES,
       });
+      // Un lote que se cae ya no tumba el workspace, pero DEBE verse: el bug
+      // anterior vivio una semana justamente por fallar en silencio.
+      if (failedChunks > 0) {
+        totals.failedChunks += failedChunks;
+        log('warn', 'entities_chunks_failed', { workspaceId: ws.id, failedChunks });
+      }
       if (entities > 0) {
         totals.withEntities++;
         totals.entities += entities;
