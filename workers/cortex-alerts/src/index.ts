@@ -16,6 +16,13 @@ const EnvSchema = z.object({
   ALERTS_LOOKBACK_MINUTES: z.coerce.number().int().positive().default(90),
   /** Cap items per workspace per run. Avoids runaway after big ingestion bursts. */
   ALERTS_MAX_PER_WORKSPACE: z.coerce.number().int().positive().default(40),
+  /**
+   * Antigüedad máxima del CONTENIDO (no de la ingesta). ALERTS_LOOKBACK_MINUTES
+   * mira `nodes.created_at`, que es cuándo lo guardamos — no cuándo pasó. Un
+   * backfill de Gmail trae meses de bandeja con created_at = ahora, y sin este
+   * tope el motor los trata como novedad: el 16-jul alertó un correo del 5-may.
+   */
+  ALERTS_MAX_CONTENT_AGE_DAYS: z.coerce.number().int().positive().default(7),
 });
 
 function log(level: 'info' | 'warn' | 'error', msg: string, extra: Record<string, unknown> = {}): void {
@@ -88,6 +95,20 @@ const AlertsResponseSchema = z.object({
  * Render a node into a compact line for the LLM input. Includes the
  * node's UUID so the LLM can reference it back in its output.
  */
+/**
+ * Fecha propia del contenido — cuándo OCURRIÓ, no cuándo lo ingerimos. Gmail la
+ * trae en RFC 2822 ("Tue, 5 May 2026 11:03:00 -0500"); calendar usa `start`.
+ * Devuelve null si el nodo no tiene fecha propia (ej. una nota manual, que por
+ * definición es de ahora).
+ */
+function contentDate(n: NodeRow): Date | null {
+  const meta = (n.external_metadata ?? {}) as Record<string, unknown>;
+  const raw = (meta.date ?? meta.start) as string | undefined;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function nodeLine(n: NodeRow): string {
   const meta = (n.external_metadata ?? {}) as Record<string, unknown>;
   const date = (meta.date as string | undefined) ?? n.created_at;
@@ -112,8 +133,8 @@ async function alertsForWorkspace(
   db: Db,
   workspaceId: string,
   cfg: z.infer<typeof EnvSchema>,
-): Promise<{ scanned: number; created: number; skipped: number; errors: string[] }> {
-  const stats = { scanned: 0, created: 0, skipped: 0, errors: [] as string[] };
+): Promise<{ scanned: number; created: number; skipped: number; stale: number; errors: string[] }> {
+  const stats = { scanned: 0, created: 0, skipped: 0, stale: 0, errors: [] as string[] };
 
   // Owner_id needed to attribute the alert (alerts.user_id NOT NULL).
   const { data: ws } = await db
@@ -155,7 +176,18 @@ async function alertsForWorkspace(
   const alreadyClassified = new Set(
     (existingAlerts ?? []).map((a) => a.node_id),
   );
-  const newNodes = nodes.filter((n) => !alreadyClassified.has(n.id));
+  const unclassified = nodes.filter((n) => !alreadyClassified.has(n.id));
+
+  // Descarta contenido viejo recien ingerido. `since` filtra por cuando lo
+  // guardamos; esto filtra por cuando OCURRIO. Sin esto, cualquier backfill
+  // (conectar Gmail, resincronizar) dispara una avalancha de alertas sobre
+  // correos de hace meses — y el usuario las ve fechadas hoy.
+  const maxAgeMs = cfg.ALERTS_MAX_CONTENT_AGE_DAYS * 24 * 3600_000;
+  const newNodes = unclassified.filter((n) => {
+    const cd = contentDate(n);
+    return cd === null || Date.now() - cd.getTime() <= maxAgeMs;
+  });
+  stats.stale = unclassified.length - newNodes.length;
   stats.scanned = newNodes.length;
   if (newNodes.length === 0) return stats;
 

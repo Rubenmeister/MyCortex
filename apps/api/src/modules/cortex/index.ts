@@ -109,9 +109,12 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
       .safeParse(req.query);
     if (!q.success) return reply.code(400).send({ error: 'invalid_query' });
 
+    // Traemos la fecha propia del nodo origen: `created_at` de la alerta es
+    // cuándo la generamos, NO cuándo pasó el hecho. Tras un backfill de Gmail
+    // divergen meses (un correo del 5-may alertado el 16-jul se veía "16 jul").
     let query = auth.db
       .from('smart_alerts')
-      .select('*')
+      .select('*, nodes(external_metadata)')
       .eq('workspace_id', auth.workspaceId)
       // critical first, then high, then low, ties broken by recency.
       .order('level', { ascending: true })
@@ -122,7 +125,21 @@ export const cortexModule: FastifyPluginAsync = async (server) => {
     }
     const { data, error } = await query;
     if (error) return reply.code(500).send({ error: 'db_error', detail: error.message });
-    return reply.code(200).send({ alerts: data ?? [] });
+
+    const alerts = (data ?? []).map((row) => {
+      const { nodes, ...alert } = row as typeof row & {
+        nodes: { external_metadata: unknown } | null;
+      };
+      const meta = (nodes?.external_metadata ?? {}) as Record<string, unknown>;
+      const raw = (meta.date ?? meta.start) as string | undefined;
+      const parsed = raw ? new Date(raw) : null;
+      return {
+        ...alert,
+        // ISO o null. El cliente decide cómo pintarla; null = usar created_at.
+        source_date: parsed && !Number.isNaN(parsed.getTime()) ? parsed.toISOString() : null,
+      };
+    });
+    return reply.code(200).send({ alerts });
   });
 
   /**

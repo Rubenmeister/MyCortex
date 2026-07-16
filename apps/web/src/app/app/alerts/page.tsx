@@ -44,6 +44,33 @@ function formatDeadline(iso: string | null): string | null {
   return `en ${diffD}d`;
 }
 
+/**
+ * Fecha a mostrar: la del HECHO (source_date, del correo/evento origen), no la
+ * de la alerta. Divergen tras un backfill — un correo del 5-may alertado hoy se
+ * veía "16 jul", que es mentir sobre cuándo pasó. Si el hecho no es de hoy, se
+ * dice en voz alta ("hace 72d") en vez de disfrazarlo de novedad.
+ */
+function formatSourceAge(
+  sourceDate: string | null | undefined,
+  createdAt: string,
+): { label: string; title: string } {
+  const iso = sourceDate ?? createdAt;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return { label: '', title: '' };
+  const stamp = d.toLocaleString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const days = Math.floor((Date.now() - d.getTime()) / 86_400_000);
+  const detected = new Date(createdAt).toLocaleDateString();
+  const title = sourceDate
+    ? `Ocurrió el ${d.toLocaleString()} · detectado el ${detected}`
+    : `Detectado el ${detected}`;
+  return { label: days >= 2 ? `${stamp} · hace ${days}d` : stamp, title };
+}
+
 export default function AlertsPage() {
   const { current } = useWorkspace();
   const [alerts, setAlerts] = useState<SmartAlert[]>([]);
@@ -151,6 +178,7 @@ export default function AlertsPage() {
           {visible.map((a) => {
             const meta = LEVEL_META[a.level];
             const deadline = formatDeadline(a.deadline);
+            const sourceAge = formatSourceAge(a.source_date, a.created_at);
             const resolved = Boolean(a.dismissed_at || a.acted_on_at);
             return (
               <li
@@ -166,13 +194,8 @@ export default function AlertsPage() {
                     {meta.emoji} {meta.label}
                   </span>
                   {deadline && <span className="deadline">⏱ {deadline}</span>}
-                  <span className="age">
-                    {new Date(a.created_at).toLocaleString(undefined, {
-                      day: 'numeric',
-                      month: 'short',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                  <span className="age" title={sourceAge.title}>
+                    {sourceAge.label}
                   </span>
                 </div>
                 <div className="alert-title">{a.title}</div>

@@ -331,6 +331,12 @@ export type SmartAlert = {
   dismissed_at: string | null;
   acted_on_at: string | null;
   created_at: string;
+  /**
+   * Fecha del HECHO origen (correo/evento), ISO. `created_at` es cuándo se
+   * generó la alerta — tras un backfill divergen meses. null si el nodo no
+   * tiene fecha propia (ej. nota manual).
+   */
+  source_date: string | null;
 };
 
 export async function listAlerts(
