@@ -126,10 +126,18 @@ async function alertsForWorkspace(
   const since = new Date(Date.now() - cfg.ALERTS_LOOKBACK_MINUTES * 60_000).toISOString();
 
   // Fetch recent nodes in this workspace.
+  //
+  // Los nodos de going-bridge (commits/PRs del repo) quedan FUERA: la bandeja de
+  // alertas es la bandeja personal — correo, calendario, drive, notas. Un commit
+  // que el propio usuario escribio no es una accion pendiente, y sin esta
+  // exclusion el 92% de las alertas eran su propio repo (y llegaban como '[Nota]',
+  // indistinguibles de una nota manual, asi que el LLM las trataba como tarea).
+  // El negocio ya se cubre por otra via: generateExecutiveBriefing en going-bridge.
   const { data: nodes, error } = await db
     .from('nodes')
     .select('*')
     .eq('workspace_id', workspaceId)
+    .or('external_source.is.null,external_source.neq.going')
     .gte('created_at', since)
     .order('created_at', { ascending: false })
     .limit(cfg.ALERTS_MAX_PER_WORKSPACE);
