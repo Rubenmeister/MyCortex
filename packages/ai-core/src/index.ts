@@ -5,7 +5,17 @@ import { embed, generateText } from 'ai';
 
 export const models = {
   classifier: openai('gpt-4o-mini'),
-  reasoner: anthropic('claude-sonnet-4-6'),
+  /**
+   * Haiku 4.5 ($1/$5 por millón), NO Sonnet 4.6 ($3/$15). Decisión de Rubén
+   * (16-jul-2026): un razonador caro solo se justifica para construir código;
+   * para lo cotidiano —leer correos, redactar un briefing, proponer contexto—
+   * es martillar una tuerca. El precio objetivo de MyCortex es $3-5/mes, así
+   * que el costo fijo por persona tiene que caber en centavos.
+   *
+   * El ID lleva fecha a propósito: `claude-haiku-4-5` a secas NO existe en la
+   * API (verificado contra GET /v1/models — daría 404 en los 10 call sites).
+   */
+  reasoner: anthropic('claude-haiku-4-5-20251001'),
   fallback: google('gemini-2.5-pro'),
 } as const;
 
