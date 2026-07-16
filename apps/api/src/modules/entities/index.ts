@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { extractEntities } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
+import { incrementAiOps } from '../../lib/plans.js';
 
 const ListQuery = z.object({
   type: z.enum(['persona', 'proyecto', 'organizacion', 'lugar', 'tema', 'otro']).optional(),
@@ -104,6 +105,7 @@ export const entitiesModule: FastifyPluginAsync = async (server) => {
 
       try {
         const result = await extractEntities(auth.db, auth.workspaceId, auth.userId, { lookbackDays });
+        void incrementAiOps(auth.workspaceId);
         return reply.code(200).send(result);
       } catch (err) {
         req.log.error({ err: String(err) }, 'entities_extract_failed');

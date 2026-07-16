@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { acceptContextProposal, proposeContextUpdates } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
+import { incrementAiOps } from '../../lib/plans.js';
 
 const PutBody = z.object({ body: z.string().max(20000) });
 const ListQuery = z.object({
@@ -89,6 +90,7 @@ export const contextModule: FastifyPluginAsync = async (server) => {
 
       try {
         const { created } = await proposeContextUpdates(auth.db, auth.workspaceId, auth.userId, { lookbackDays });
+        void incrementAiOps(auth.workspaceId);
         return reply.code(200).send({ created });
       } catch (err) {
         req.log.error({ err: String(err) }, 'context_propose_failed');

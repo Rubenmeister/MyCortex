@@ -3,6 +3,7 @@ import { z } from 'zod';
 import type { TaskInsert, TaskUpdate } from '@mycortex/db/types';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
+import { incrementAiOps } from '../../lib/plans.js';
 import { extractActionItems } from './extract.js';
 
 const ListQuery = z.object({
@@ -151,6 +152,7 @@ export const tasksModule: FastifyPluginAsync = async (server) => {
       let items;
       try {
         items = await extractActionItems(auth.db, auth.workspaceId, { lookbackDays });
+        void incrementAiOps(auth.workspaceId);
       } catch (err) {
         req.log.error({ err: String(err) }, 'tasks_extract_failed');
         return reply.code(502).send({ error: 'extract_failed' });

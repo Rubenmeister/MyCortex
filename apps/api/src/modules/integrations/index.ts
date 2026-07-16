@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { requireAuth } from '../../lib/auth.js';
+import { assertIntegrationQuota } from '../../lib/plans.js';
 import { getDb } from '../../lib/db.js';
 import { getEnv } from '../../lib/env.js';
 import {
@@ -128,6 +129,8 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
   server.get('/drive/connect', async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
+    // Tope de integraciones del plan (free: 1 — Drive O Gmail O Calendar).
+    await assertIntegrationQuota(auth.db, auth.workspaceId, 'google_drive');
     const env = getEnv();
     if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET || !env.GOOGLE_OAUTH_REDIRECT_URI) {
       return reply.code(503).send({ error: 'google_oauth_not_configured' });
@@ -348,6 +351,7 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
   server.get('/gmail/connect', async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
+    await assertIntegrationQuota(auth.db, auth.workspaceId, 'gmail');
     const env = getEnv();
     if (!env.GOOGLE_OAUTH_CLIENT_ID || !env.GOOGLE_OAUTH_CLIENT_SECRET || !env.GMAIL_OAUTH_REDIRECT_URI) {
       return reply.code(503).send({ error: 'gmail_oauth_not_configured' });
@@ -501,6 +505,7 @@ export const integrationsModule: FastifyPluginAsync = async (server) => {
   server.get('/calendar/connect', async (req, reply) => {
     const auth = await requireAuth(req, reply);
     if (!auth) return;
+    await assertIntegrationQuota(auth.db, auth.workspaceId, 'google_calendar');
     const env = getEnv();
     if (
       !env.GOOGLE_OAUTH_CLIENT_ID ||

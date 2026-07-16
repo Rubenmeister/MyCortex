@@ -20,14 +20,37 @@ export type Json = string | number | boolean | null | { [k: string]: Json } | Js
 
 // ---- Workspaces ---------------------------------------------------------
 
+export type WorkspacePlan = 'free' | 'pro' | 'team';
+
 export type WorkspaceRow = {
   id: string;
   name: string;
   slug: string | null;
   owner_id: string;
   is_personal: boolean;
+  /** Plan del workspace. NO editable por el usuario (grant revocado en la DB). */
+  plan: WorkspacePlan;
   created_at: string;
   updated_at: string;
+};
+
+// ---- Uso / cuotas -------------------------------------------------------
+
+export type UsageCounterRow = {
+  workspace_id: string;
+  /** Mes calendario UTC, 'YYYY-MM'. */
+  period: string;
+  /** 'ai_ops' */
+  metric: string;
+  count: number;
+  updated_at: string;
+};
+
+export type UsageCounterInsert = {
+  workspace_id: string;
+  period: string;
+  metric: string;
+  count?: number;
 };
 
 export type WorkspaceInsert = {
@@ -806,6 +829,12 @@ export type Database = {
         Update: WorkspaceUpdate;
         Relationships: [];
       };
+      usage_counters: {
+        Row: UsageCounterRow;
+        Insert: UsageCounterInsert;
+        Update: Partial<UsageCounterInsert>;
+        Relationships: [];
+      };
       workspace_members: {
         Row: WorkspaceMemberRow;
         Insert: WorkspaceMemberInsert;
@@ -959,6 +988,17 @@ export type Database = {
     };
     Views: Record<string, never>;
     Functions: {
+      // Incremento atómico de un contador de uso. security definer: solo el
+      // service-role puede ejecutarla (el usuario no resetea su cuota).
+      increment_usage: {
+        Args: {
+          p_workspace_id: string;
+          p_period: string;
+          p_metric: string;
+          p_delta?: number;
+        };
+        Returns: number;
+      };
       match_nodes: {
         Args: {
           query_embedding: number[];

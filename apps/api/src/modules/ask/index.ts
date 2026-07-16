@@ -11,6 +11,7 @@ import {
 } from '@mycortex/ai-core';
 import { buildContextBlock } from '@mycortex/cortex-engine';
 import { requireAuth } from '../../lib/auth.js';
+import { assertAiQuota, incrementAiOps, limitsFor } from '../../lib/plans.js';
 import { getEnv } from '../../lib/env.js';
 import { transcribeAudio } from '../ingesta/whisper.js';
 
@@ -200,6 +201,10 @@ export const askModule: FastifyPluginAsync = async (server) => {
       return reply.code(503).send({ error: 'anthropic_required_for_ask' });
     }
 
+    // Plan: define el tope mensual de IA y qué extras (Cohere/Tavily) aplican.
+    await assertAiQuota(auth.db, auth.workspaceId);
+    const limits = await limitsFor(auth.db, auth.workspaceId);
+
     const parsed = AskBodySchema.safeParse(req.body);
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid_request', issues: parsed.error.issues });
@@ -255,7 +260,9 @@ export const askModule: FastifyPluginAsync = async (server) => {
     let noteSources: HybridMatch[];
     let rerankMs: number | undefined;
     const rerankScoreById = new Map<string, number>();
-    if (env.COHERE_API_KEY && rawCandidates.length > 1) {
+    // Rerank premium: Pro+ (así lo promete /pricing). En free degrada al
+    // orden híbrido, que ya es el fallback natural de abajo.
+    if (limits.cohere && env.COHERE_API_KEY && rawCandidates.length > 1) {
       const rerankStart = Date.now();
       try {
         // We rerank against title+content so the cross-encoder sees the
@@ -287,7 +294,9 @@ export const askModule: FastifyPluginAsync = async (server) => {
     //    - Notes weak (best similarity below threshold)? Yes.
     //    - Caller explicitly requested forceWeb? Yes.
     //    - Tavily key not configured? No (graceful degrade).
+    //    - Plan sin web search (free)? No — es Pro+ según /pricing.
     const shouldCallWeb =
+      limits.tavily &&
       Boolean(env.TAVILY_API_KEY) &&
       (parsed.data.forceWeb === true || bestNoteSimilarity < WEB_FALLBACK_SIMILARITY);
 
@@ -355,6 +364,7 @@ export const askModule: FastifyPluginAsync = async (server) => {
         prompt: userPrompt,
       });
       answer = result.text.trim();
+      void incrementAiOps(auth.workspaceId);
     } catch (err) {
       req.log.error({ err: String(err) }, 'claude_failed_in_ask');
       return reply.code(502).send({ error: 'answer_generation_failed', detail: String(err).slice(0, 200) });

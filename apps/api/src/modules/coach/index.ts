@@ -11,6 +11,7 @@ import {
 import type { TaskInsert } from '@mycortex/db/types';
 import { requireAuth } from '../../lib/auth.js';
 import { getEnv } from '../../lib/env.js';
+import { assertAiQuota, incrementAiOps } from '../../lib/plans.js';
 
 const GenerateBody = z.object({
   lookbackDays: z.coerce.number().int().min(7).max(180).optional(),
@@ -61,10 +62,14 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       const body = GenerateBody.safeParse(req.body ?? {});
       if (!body.success) return reply.code(400).send({ error: 'invalid_request', issues: body.error.issues });
 
+      // Fuera del try: un QuotaError debe salir como 402, no como 502.
+      await assertAiQuota(auth.db, auth.workspaceId);
+
       try {
         const out = await generateCoachSuggestions(auth.db, auth.workspaceId, {
           lookbackDays: body.data.lookbackDays,
         });
+        void incrementAiOps(auth.workspaceId);
         let saved: { runId: string | null; inserted: number } | undefined;
         if (body.data.save) {
           saved = await persistCoachGeneration(auth.db, auth.workspaceId, auth.userId, out);
@@ -257,6 +262,7 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       if (!env.ANTHROPIC_API_KEY) return reply.code(503).send({ error: 'anthropic_required_for_coach' });
       try {
         const profile = await deriveUserProfile(auth.db, auth.workspaceId, auth.userId);
+        void incrementAiOps(auth.workspaceId);
         return reply.code(200).send({ profile });
       } catch (err) {
         req.log.error({ err: String(err) }, 'coach_profile_refresh_failed');
@@ -310,6 +316,7 @@ export const coachModule: FastifyPluginAsync = async (server) => {
           periodStart: body.data.periodStart,
           periodEnd: body.data.periodEnd,
         });
+        void incrementAiOps(auth.workspaceId);
         return reply.code(200).send({ episode });
       } catch (err) {
         req.log.error({ err: String(err) }, 'coach_episode_failed');
@@ -367,6 +374,7 @@ export const coachModule: FastifyPluginAsync = async (server) => {
 
       try {
         const replyText = await coachChat(auth.db, auth.workspaceId, body.data.message, history);
+        void incrementAiOps(auth.workspaceId);
         // Persistimos ambos turnos (best-effort en el insert).
         await auth.db.from('coach_messages').insert([
           { workspace_id: auth.workspaceId, user_id: auth.userId, role: 'user', content: body.data.message },

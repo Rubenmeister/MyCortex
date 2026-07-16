@@ -5,6 +5,7 @@ import { classify } from './classifier.js';
 import { insertNode } from './repository.js';
 import { enrichNode } from '../accion/enricher.js';
 import { transcribeAudio } from './whisper.js';
+import { assertNodeQuota, incrementAiOps } from '../../lib/plans.js';
 
 export const ingestaModule: FastifyPluginAsync = async (server) => {
   async function ingestText(
@@ -16,7 +17,12 @@ export const ingestaModule: FastifyPluginAsync = async (server) => {
     },
     reqLog: { log: { warn: (...a: unknown[]) => void; info: (...a: unknown[]) => void; error: (...a: unknown[]) => void } },
   ) {
+    // Tope de nodos del plan (500 free / 50.000 pro). Se comprueba ANTES de
+    // clasificar para no gastar una llamada de IA en un nodo que rechazaremos.
+    await assertNodeQuota(auth.db, auth.workspaceId);
+
     const classification = await classify(args.text);
+    void incrementAiOps(auth.workspaceId); // classify + embedding
     const node = await insertNode(auth.db, {
       workspace_id: auth.workspaceId,
       user_id: auth.userId,

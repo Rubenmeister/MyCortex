@@ -1,6 +1,7 @@
 import { cohereRerank, embedText, generateText, models } from '@mycortex/ai-core';
 import { buildContextBlock } from '@mycortex/cortex-engine';
 import type { Db } from '@mycortex/db';
+import { incrementAiOps, limitsFor } from '../../lib/plans.js';
 import { MEETING_PREP_SYSTEM_PROMPT } from './prompts.js';
 
 /** Evento de agenda derivado de un nodo de calendario. */
@@ -134,7 +135,10 @@ export async function buildMeetingPrep(
     (m) => m.id !== eventNodeId && m.external_source !== 'calendar',
   );
 
-  if (env.COHERE_API_KEY && candidates.length > 1) {
+  // Rerank premium: Pro+ (así lo promete /pricing). En free degrada al orden
+  // híbrido (el else de abajo), sin perder la funcionalidad.
+  const planLimits = await limitsFor(db, workspaceId);
+  if (planLimits.cohere && env.COHERE_API_KEY && candidates.length > 1) {
     try {
       const reranked = await cohereRerank(
         query,
@@ -188,6 +192,7 @@ ${ctx}`;
     prompt: userPrompt,
     maxTokens: 1200,
   });
+  void incrementAiOps(workspaceId);
 
   return { event, brief: text.trim(), sources };
 }

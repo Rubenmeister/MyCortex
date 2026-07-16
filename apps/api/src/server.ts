@@ -11,6 +11,7 @@ import { agendaModule } from './modules/agenda/index.js';
 import { tasksModule } from './modules/tasks/index.js';
 import { entitiesModule } from './modules/entities/index.js';
 import { contextModule } from './modules/context/index.js';
+import { usageModule } from './modules/usage/index.js';
 import { bridgeModule } from './modules/bridge/index.js';
 import { askModule } from './modules/ask/index.js';
 import { workspacesModule } from './modules/workspaces/index.js';
@@ -18,6 +19,7 @@ import { integrationsModule } from './modules/integrations/index.js';
 import { invitationsModule } from './modules/invitations/index.js';
 import { whatsappModule } from './modules/whatsapp/index.js';
 import { getEnv } from './lib/env.js';
+import { QuotaError } from './lib/plans.js';
 
 export async function buildServer(): Promise<FastifyInstance> {
   const env = getEnv();
@@ -79,6 +81,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   // de Fastify (incluye errores no-manejados de handlers). Pre-filtramos
   // 4xx en beforeSend() de sentry.ts para no enviarlos.
   server.setErrorHandler((err: unknown, request, reply) => {
+    // Cuota agotada → 402 con el detalle, para que la UI sepa qué límite se
+    // tocó y ofrezca subir de plan. Se maneja aquí (y no en cada ruta) para
+    // que cualquier `throw new QuotaError(...)` quede cubierto.
+    if (err instanceof QuotaError) {
+      request.log.info({ code: err.code, ...err.detail }, 'quota_exceeded');
+      return reply.code(402).send({ error: err.code, ...err.detail });
+    }
     // Normalize: handler de Fastify recibe `unknown` en strict mode.
     const e = err as { statusCode?: number; name?: string; message?: string };
     const code = e.statusCode ?? 500;
@@ -108,6 +117,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(tasksModule, { prefix: '/tasks' });
   await server.register(entitiesModule, { prefix: '/entities' });
   await server.register(contextModule, { prefix: '/context' });
+  await server.register(usageModule, { prefix: '/usage' });
   await server.register(bridgeModule, { prefix: '/bridge' });
   await server.register(askModule, { prefix: '/ask' });
   await server.register(workspacesModule, { prefix: '/workspaces' });
