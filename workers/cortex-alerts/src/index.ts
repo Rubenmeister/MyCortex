@@ -62,6 +62,8 @@ REGLAS DE OMISIÓN (estos NUNCA generan alerta, devuélvelos vacíos):
 - **Notificaciones de redes sociales**: likes, comments, menciones, "alguien comentó tu post".
 - **Confirmaciones de transacciones ya completadas**: "tu pago fue exitoso", "recibimos tu transferencia". Solo informativos.
 - **Status normales de sistemas**: "tu app funciona normal", reportes de uptime, "todo OK".
+- **Automatización de desarrollo**: notificaciones de GitHub/Vercel/CI/CD, builds, deploys, pull requests, errores de Sentry, dependabot. El usuario ya vive en esas herramientas; esto es un asistente PERSONAL, no un panel de ops. OMITIR SIEMPRE, aunque digan "failure" o "urgente".
+- **Reportes automáticos que el propio usuario o sus agentes generan** (health reports, briefings diarios, resúmenes): son informativos, no acciones pendientes.
 - **Recibos / facturas ya pagadas / cierres de cuenta sin acción pendiente**.
 
 REGLAS DE INCLUSIÓN (estos SÍ son alerta accionable):
@@ -69,7 +71,7 @@ REGLAS DE INCLUSIÓN (estos SÍ son alerta accionable):
 - Mensajes de personas reales esperando respuesta concreta.
 - Cuentas bloqueadas, accesos comprometidos, alertas de seguridad QUE REQUIEREN ACCIÓN (cambiar contraseña, contactar soporte) — NO los OTPs.
 - Reuniones próximas que requieren preparación.
-- Tareas asignadas en plataformas (Datafast, Datil, GitHub PRs, Jira, etc.).
+- Tareas asignadas en plataformas de NEGOCIO (Datafast, Datil, SRI, bancos, portales de trámites). NO herramientas de desarrollo — esas están en la lista de omisión.
 - Operaciones logísticas inminentes sin asignar (viajes, entregas).
 
 REGLAS GENERALES:
@@ -90,6 +92,22 @@ const AlertItemSchema = z.object({
 const AlertsResponseSchema = z.object({
   alerts: z.array(AlertItemSchema),
 });
+
+/**
+ * Remitentes que son máquinas avisando de máquinas: GitHub/Vercel/CI, deploys,
+ * Sentry. Tras sacar los commits del bridge, el MISMO ruido volvió por Gmail
+ * ("Revisar implementación de Sentry en la API", de `vercel[bot]`, marcada
+ * high). Se corta por remitente — un dato duro — en vez de pedirle criterio al
+ * modelo. Deliberadamente estrecho: `no-reply@` en general NO entra aquí, que
+ * ahí viven facturas y avisos del banco que sí importan.
+ */
+const BOT_SENDER = /notifications@github\.com|\[bot\]|noreply@(vercel|netlify|github)\.com|@sentry\.io/i;
+
+function isBotSender(n: NodeRow): boolean {
+  if (n.external_source !== 'gmail') return false;
+  const from = ((n.external_metadata ?? {}) as Record<string, unknown>).from;
+  return typeof from === 'string' && BOT_SENDER.test(from);
+}
 
 /**
  * Fecha propia del contenido — cuándo OCURRIÓ, no cuándo lo ingerimos. Gmail la
@@ -184,6 +202,7 @@ async function alertsForWorkspace(
   // correos de hace meses — y el usuario las ve fechadas hoy.
   const maxAgeMs = cfg.ALERTS_MAX_CONTENT_AGE_DAYS * 24 * 3600_000;
   const newNodes = unclassified.filter((n) => {
+    if (isBotSender(n)) return false;
     const cd = contentDate(n);
     return cd === null || Date.now() - cd.getTime() <= maxAgeMs;
   });
