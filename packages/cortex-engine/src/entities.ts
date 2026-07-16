@@ -96,10 +96,23 @@ export async function extractEntities(
   }
 
   const validIds = new Set(nodes.map((n) => n.id));
-  // Unificamos por nombre (case-insensitive), mergeando nodeIds validos.
+  // Unificamos por nombre, mergeando nodeIds validos.
+  //
+  // La clave IGNORA TILDES a proposito: con `toLowerCase()` a secas, "Ruben
+  // Torres" y "Rubén Torres" son claves distintas y Ruben terminaba como dos
+  // entidades separadas (19x y 11x) en su propio grafo. Antes se disimulaba
+  // porque una sola llamada veia los 80 nodos y el modelo unificaba; con lotes
+  // de 20, cada lote solo unifica lo suyo y la deduplicacion determinista pasa
+  // a ser la que manda.
+  const dedupeKey = (name: string): string =>
+    name
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .trim()
+      .toLowerCase();
   const merged = new Map<string, { name: string; type: EntityType; nodeIds: Set<string> }>();
   for (const e of extracted) {
-    const key = e.name.trim().toLowerCase();
+    const key = dedupeKey(e.name);
     if (!key) continue;
     const cur = merged.get(key) ?? { name: e.name.trim(), type: e.type as EntityType, nodeIds: new Set<string>() };
     for (const id of e.nodeIds) if (validIds.has(id)) cur.nodeIds.add(id);
