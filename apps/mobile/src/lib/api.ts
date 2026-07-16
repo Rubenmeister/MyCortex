@@ -81,6 +81,9 @@ export async function runCortex(): Promise<{
   const res = await fetch(`${API_URL}/cortex/run`, {
     method: 'POST',
     headers: await authHeaders(),
+    // authHeaders() manda Content-Type: application/json y Fastify rechaza (400)
+    // un POST con ese content-type y body vacío. Sin cuerpo, enviamos '{}'.
+    body: '{}',
   });
   if (!res.ok) throw new Error(`cortex ${res.status}: ${await res.text()}`);
   return res.json();
@@ -218,6 +221,7 @@ export async function suggestionToTask(id: string): Promise<{ task: Task; alread
   const res = await fetch(`${API_URL}/coach/suggestions/${id}/to-task`, {
     method: 'POST',
     headers: await authHeaders(),
+    body: '{}',
   });
   if (!res.ok) throw new Error(`to_task ${res.status}`);
   return res.json();
@@ -323,6 +327,7 @@ export async function acceptContextProposal(id: string): Promise<{ body?: string
   const res = await fetch(`${API_URL}/context/proposals/${id}/accept`, {
     method: 'POST',
     headers: await authHeaders(),
+    body: '{}',
   });
   if (!res.ok) throw new Error(`accept ${res.status}`);
   return res.json();
@@ -332,6 +337,7 @@ export async function rejectContextProposal(id: string): Promise<void> {
   const res = await fetch(`${API_URL}/context/proposals/${id}/reject`, {
     method: 'POST',
     headers: await authHeaders(),
+    body: '{}',
   });
   if (!res.ok) throw new Error(`reject ${res.status}`);
 }
