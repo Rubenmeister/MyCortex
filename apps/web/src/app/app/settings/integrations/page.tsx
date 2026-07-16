@@ -175,7 +175,7 @@ export default function IntegrationsPage() {
       <h1>Integraciones</h1>
       <p className="sub">
         Conecta servicios externos para que MyCortex aprenda de ellos. Tu segundo cerebro
-        accede a tus archivos cuando preguntás.
+        accede a tus archivos cuando preguntas.
       </p>
 
       {driveConnected && (
@@ -236,7 +236,7 @@ export default function IntegrationsPage() {
             <div className="provider-name">{PROVIDER_LABEL.google_drive}</div>
             <div className="provider-desc">
               Indexa carpetas de tu Drive. PDF, Docs, .docx — todo se vuelve buscable
-              y MyCortex lo cita cuando le preguntés.
+              y MyCortex lo cita cuando le preguntes.
             </div>
           </div>
         </div>
