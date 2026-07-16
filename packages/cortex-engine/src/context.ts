@@ -2,6 +2,7 @@ import { generateObject, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
 import type { ContextProposalInsert } from '@mycortex/db/types';
 import { z } from 'zod';
+import { meterAi } from '@mycortex/db';
 
 // La capa 1 se mantiene chica por diseño: tope de inyección ~2k tokens.
 const MAX_CONTEXT_CHARS = 8000;
@@ -101,13 +102,14 @@ export async function proposeContextUpdates(
       .map((n) => `===\n[${n.external_source ?? 'nota'}] id=${n.id}\n${n.title ?? ''}\n${n.content.slice(0, 350).replace(/\s+/g, ' ')}`)
       .join('\n');
 
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model: models.reasoner,
     schema: ProposalSchema,
     system: PROPOSE_SYSTEM,
     prompt,
     maxTokens: 2500,
   });
+  void meterAi(db, workspaceId, models.reasoner.modelId, usage);
 
   const validIds = new Set(nodes.map((n) => n.id));
   const bodyLower = currentBody.toLowerCase();

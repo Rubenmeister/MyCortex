@@ -2,6 +2,7 @@ import { generateObject, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
 import type { EntityInsert, EntityMentionInsert, EntityType } from '@mycortex/db/types';
 import { z } from 'zod';
+import { meterAi } from '@mycortex/db';
 
 const ExtractedSchema = z.object({
   entities: z.array(
@@ -57,13 +58,14 @@ export async function extractEntities(
       .map((n) => `===\n[${n.external_source ?? 'nota'}] id=${n.id}\n${n.title ?? ''}\n${n.content.slice(0, 350).replace(/\s+/g, ' ')}`)
       .join('\n');
 
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model: models.reasoner,
     schema: ExtractedSchema,
     system: EXTRACT_SYSTEM,
     prompt,
     maxTokens: 4000,
   });
+  void meterAi(db, workspaceId, models.reasoner.modelId, usage);
 
   const validIds = new Set(nodes.map((n) => n.id));
   // Unificamos por nombre (case-insensitive), mergeando nodeIds válidos.

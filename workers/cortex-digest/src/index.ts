@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generateText, models } from '@mycortex/ai-core';
-import { createDb, type Db } from '@mycortex/db';
+import { createDb, meterAi, type Db } from '@mycortex/db';
 import type {
   DailyDigestInsert,
   DigestCounts,
@@ -213,6 +213,8 @@ Tu output va directo a la pantalla de weekly reflection los lunes a la mañana.`
 type LLMResult = { summary: string; sections: DigestSection[] };
 
 async function generateDigest(
+  db: Db,
+  workspaceId: string,
   inputs: DigestInputs,
   forDateIso: string,
   kind: 'daily' | 'weekly',
@@ -278,6 +280,7 @@ async function generateDigest(
     prompt,
     maxTokens: kind === 'weekly' ? 2200 : 1500,
   });
+  void meterAi(db, workspaceId, models.reasoner.modelId, result.usage);
 
   return { summary: result.text.trim(), sections: [] };
 }
@@ -312,7 +315,7 @@ async function digestForWorkspace(
   let summary: string;
   let sections: DigestSection[];
   try {
-    const res = await generateDigest(inputs, forDateIso, kind);
+    const res = await generateDigest(db, workspaceId, inputs, forDateIso, kind);
     summary = res.summary;
     sections = res.sections;
   } catch (err) {

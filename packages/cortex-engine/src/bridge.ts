@@ -1,6 +1,7 @@
 import { generateObject, models } from '@mycortex/ai-core';
 import type { Db } from '@mycortex/db';
 import { z } from 'zod';
+import { meterAi } from '@mycortex/db';
 
 /**
  * Puente Going <-> MyCortex: la INTELIGENCIA. Lee las señales de Going que el
@@ -80,13 +81,14 @@ export async function generateExecutiveBriefing(
     const prompt =
       `Estas son las ${nodes.length} señales recientes de Going (${lookbackDays} días). Arma el briefing ejecutivo.\n\n` +
       nodes.map((n) => `===\n${signalLine(n)}`).join('\n');
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: models.reasoner,
       schema: BriefingSchema,
       system: EXEC_BRIEFING_SYSTEM_PROMPT,
       prompt,
       maxTokens: 2500,
     });
+    void meterAi(db, workspaceId, models.reasoner.modelId, usage);
     briefing = object;
   }
 

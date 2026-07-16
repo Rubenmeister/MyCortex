@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { generateObject, models } from '@mycortex/ai-core';
-import { createDb, type Db } from '@mycortex/db';
+import { createDb, meterAi, type Db } from '@mycortex/db';
 import type {
   AlertLevel,
   NodeRow,
@@ -224,6 +224,9 @@ async function alertsForWorkspace(
       prompt,
       maxTokens: 4000,
     });
+    // El clasificador es gpt-4o-mini: barato, pero sin medirlo no sabemos
+    // cuanto pesa en el costo por persona.
+    void meterAi(db, workspaceId, models.classifier.modelId, result.usage);
     response = result.object;
   } catch (err) {
     stats.errors.push(`llm:${String(err).slice(0, 200)}`);

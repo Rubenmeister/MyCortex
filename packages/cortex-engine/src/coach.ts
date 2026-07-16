@@ -3,6 +3,7 @@ import type { Db } from '@mycortex/db';
 import type { CoachEpisodeRow, CoachProfileRow, CoachSuggestionInsert } from '@mycortex/db/types';
 import { z } from 'zod';
 import { buildContextBlock } from './context.js';
+import { meterAi } from '@mycortex/db';
 
 /**
  * Motor del Coach de crecimiento personal. Vive en el package (no en la api)
@@ -152,13 +153,17 @@ export async function generateCoachSuggestions(
     `y genera su coaching de crecimiento personal. Cita en sourceNodeIds los ítems que uses.\n\n` +
     nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
 
-  const { object } = await generateObject({
+  const { object, usage } = await generateObject({
     model: models.reasoner,
     schema: CoachResultSchema,
     system: COACH_SYSTEM_PROMPT,
     prompt,
     maxTokens: 8000,
   });
+
+  // Medición de costo (best-effort, no bloquea): sin esto no se puede saber
+  // el costo por persona ni defender el precio de $3-5/mes.
+  void meterAi(db, workspaceId, models.reasoner.modelId, usage);
 
   const validIds = new Set(nodes.map((n) => n.id));
   let droppedCitations = 0;
@@ -294,13 +299,14 @@ export async function deriveUserProfile(
       `Construye el perfil del usuario a partir de estos ${nodes.length} ítems de los últimos ${lookbackDays} días ` +
       `(presta atención a las fechas para las tendencias). Si el CONTEXTO declarado arriba afirma algo, respétalo.\n\n` +
       nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: models.reasoner,
       schema: ProfileSchema,
       system: PROFILE_SYSTEM_PROMPT,
       prompt,
       maxTokens: 2000,
     });
+    void meterAi(db, workspaceId, models.reasoner.modelId, usage);
     derived = object;
   }
 
@@ -399,13 +405,14 @@ export async function generateEpisode(
       profileBlock +
       `Escribe el episodio de diario para "${label}" a partir de estos ${nodes.length} ítems del período.\n\n` +
       nodes.map((n) => `===\n${nodeLine(n)}`).join('\n');
-    const { object } = await generateObject({
+    const { object, usage } = await generateObject({
       model: models.reasoner,
       schema: EpisodeSchema,
       system: EPISODE_SYSTEM_PROMPT,
       prompt,
       maxTokens: 2500,
     });
+    void meterAi(db, workspaceId, models.reasoner.modelId, usage);
     derived = object;
   }
 
@@ -518,12 +525,13 @@ export async function coachChat(
   const context = await buildChatContext(db, workspaceId, message);
   // Limitamos el historial para acotar tokens (últimos 12 turnos).
   const recent = history.slice(-12);
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model: models.reasoner,
     system: `${CHAT_SYSTEM_PROMPT}\n\n${context}`,
     messages: [...recent, { role: 'user', content: message }],
     maxTokens: 1000,
   });
+  void meterAi(db, workspaceId, models.reasoner.modelId, usage);
   return text.trim();
 }
 

@@ -23,3 +23,5 @@ export function createUserDb(url: string, anonKey: string, jwt: string): Db {
 }
 
 export type { Database } from './types.js';
+
+export * from './metering.js';
