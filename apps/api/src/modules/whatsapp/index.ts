@@ -5,6 +5,7 @@ import { requireAuth } from '../../lib/auth.js';
 import { getDb } from '../../lib/db.js';
 import { getEnv } from '../../lib/env.js';
 import { describeImage } from '@mycortex/ai-core';
+import { coachChat, type ChatMessage } from '@mycortex/cortex-engine';
 import { transcribeAudio } from '../ingesta/whisper.js';
 import { downloadMedia, sendText } from './client.js';
 
@@ -302,6 +303,53 @@ export const whatsappModule: FastifyPluginAsync = async (server) => {
  *     (note: nodes.source enum may need a 'whatsapp' add — done in
  *     a follow-up migration; for now we tag with closest existing).
  */
+/**
+ * Contesta como el coach, no con un acuse de recibo.
+ *
+ * Hasta el 16-jul-2026 WhatsApp solo sabía decir "📝 Capturado en tu cerebro":
+ * un buzón con recibo. El cerebro (coachChat) ya existía y nunca se conectó, así
+ * que el canal se percibía como "solo sirve para recibir inputs". No era una
+ * limitación de Meta — dentro de la ventana de 24h se puede responder texto
+ * libre sin plantillas y sin costo de conversación.
+ *
+ * Usa la MISMA tabla `coach_messages` que la web: la conversación es una sola,
+ * empieza en WhatsApp y sigue en el navegador.
+ *
+ * Best-effort: si el LLM falla, el mensaje YA quedó ingerido, así que se
+ * degrada al acuse de recibo en vez de dejar a la persona sin respuesta.
+ */
+async function replyAsCoach(
+  identity: { userId: string; workspaceId: string },
+  phone: string,
+  text: string,
+): Promise<void> {
+  const db = getDb();
+  try {
+    // Los 24 turnos MÁS RECIENTES: se piden desc y se voltean, porque asc+limit
+    // devuelve los más VIEJOS y el coach se quedaría congelado en el inicio de
+    // la conversación sin ver lo que le acaban de decir.
+    const { data: hist } = await db
+      .from('coach_messages')
+      .select('role, content')
+      .eq('workspace_id', identity.workspaceId)
+      .order('created_at', { ascending: false })
+      .limit(24);
+    const history: ChatMessage[] = (hist ?? [])
+      .reverse()
+      .map((m) => ({ role: m.role as ChatMessage['role'], content: m.content }));
+
+    const answer = await coachChat(db, identity.workspaceId, text, history);
+    await sendText(phone, answer.slice(0, 4000)); // WhatsApp corta en 4096.
+    await db.from('coach_messages').insert([
+      { workspace_id: identity.workspaceId, user_id: identity.userId, role: 'user', content: text },
+      { workspace_id: identity.workspaceId, user_id: identity.userId, role: 'assistant', content: answer },
+    ]);
+  } catch (err) {
+    console.error(JSON.stringify({ level: 'error', msg: 'whatsapp_coach_reply_failed', error: String(err).slice(0, 200) }));
+    await sendText(phone, '📝 Capturado en tu cerebro. (No pude responderte ahora; inténtalo de nuevo.)');
+  }
+}
+
 async function processMessage(
   msg: z.infer<typeof MessageSchema>,
   displayName?: string,
@@ -355,7 +403,7 @@ async function processMessage(
 
   if (msg.type === 'text' && msg.text) {
     await ingestText(apiUrl, env, identity, msg.text.body);
-    await sendText(msg.from, '📝 Capturado en tu cerebro.');
+    await replyAsCoach(identity, msg.from, msg.text.body);
     return;
   }
 

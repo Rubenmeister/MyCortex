@@ -360,14 +360,17 @@ export const coachModule: FastifyPluginAsync = async (server) => {
       const body = z.object({ message: z.string().trim().min(1).max(2000) }).safeParse(req.body);
       if (!body.success) return reply.code(400).send({ error: 'invalid_request' });
 
-      // Historial previo para la memoria de conversación.
+      // Historial previo para la memoria de conversación: los 24 turnos MÁS
+      // RECIENTES. Antes era asc+limit(24), que devuelve los más VIEJOS — al
+      // pasar de 24 mensajes el coach quedaba congelado en el arranque de la
+      // conversación y no veía lo que se le acababa de decir.
       const { data: hist } = await auth.db
         .from('coach_messages')
         .select('role, content')
         .eq('workspace_id', auth.workspaceId)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(24);
-      const history: ChatMessage[] = (hist ?? []).map((m) => ({
+      const history: ChatMessage[] = (hist ?? []).reverse().map((m) => ({
         role: m.role as ChatMessage['role'],
         content: m.content,
       }));

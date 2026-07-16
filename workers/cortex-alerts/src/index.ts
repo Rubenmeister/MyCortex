@@ -77,7 +77,7 @@ REGLAS DE INCLUSIÓN (estos SÍ son alerta accionable):
 REGLAS GENERALES:
 - Sé conservador con "critical" — solo cosas REALMENTE inmediatas (≤24h).
 - Si el item es ambiguo (no está claro si demanda acción), prefiere OMITIRLO.
-- Match el idioma del contenido (probablemente español).
+- Escribe en el IDIOMA del contenido (probablemente español), pero NUNCA en su dialecto: aunque el correo use voseo (entrá, tenés, hacé), tú siempre escribes español neutro de Ecuador con "tú". El registro es tuyo, no del remitente.
 - Salida: array JSON de objetos {nodeId, level, title, action, deadline, context}. SOLO los items accionables. Items omitidos = no aparecen en el array.`;
 
 const AlertItemSchema = z.object({
