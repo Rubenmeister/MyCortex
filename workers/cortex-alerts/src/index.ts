@@ -92,10 +92,6 @@ const AlertsResponseSchema = z.object({
 });
 
 /**
- * Render a node into a compact line for the LLM input. Includes the
- * node's UUID so the LLM can reference it back in its output.
- */
-/**
  * Fecha propia del contenido — cuándo OCURRIÓ, no cuándo lo ingerimos. Gmail la
  * trae en RFC 2822 ("Tue, 5 May 2026 11:03:00 -0500"); calendar usa `start`.
  * Devuelve null si el nodo no tiene fecha propia (ej. una nota manual, que por
@@ -109,6 +105,10 @@ function contentDate(n: NodeRow): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+/**
+ * Render a node into a compact line for the LLM input. Includes the
+ * node's UUID so the LLM can reference it back in its output.
+ */
 function nodeLine(n: NodeRow): string {
   const meta = (n.external_metadata ?? {}) as Record<string, unknown>;
   const date = (meta.date as string | undefined) ?? n.created_at;
@@ -276,7 +276,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  const totals = { scanned: 0, created: 0, skipped: 0 };
+  const totals = { scanned: 0, created: 0, skipped: 0, stale: 0 };
   const errors: string[] = [];
   let processed = 0;
   let withAlerts = 0;
@@ -288,6 +288,7 @@ async function main(): Promise<void> {
     totals.scanned += stats.scanned;
     totals.created += stats.created;
     totals.skipped += stats.skipped;
+    totals.stale += stats.stale;
     errors.push(...stats.errors.slice(0, 3));
   }
 
