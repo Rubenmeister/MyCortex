@@ -14,6 +14,11 @@ const EnvSchema = z.object({
   OPENAI_API_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
   BRIDGE_LOOKBACK_DAYS: z.coerce.number().int().positive().default(14),
+  // Escape hatch reversible: poner 'true' vuelve a ingerir fallos de CI.
+  BRIDGE_INCLUDE_CI: z
+    .string()
+    .optional()
+    .transform((v) => v === 'true'),
 });
 
 function log(level: 'info' | 'warn' | 'error', msg: string, extra: Record<string, unknown> = {}): void {
@@ -96,7 +101,9 @@ async function main(): Promise<void> {
   for (const src of sources) {
     totals.sources++;
     try {
-      const signals = await fetchGoingSignals(src.repo, src.access_token ?? undefined, since);
+      const signals = await fetchGoingSignals(src.repo, src.access_token ?? undefined, since, {
+        includeCi: cfg.BRIDGE_INCLUDE_CI,
+      });
       totals.fetched += signals.length;
       for (const s of signals) {
         try {

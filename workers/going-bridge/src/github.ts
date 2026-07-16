@@ -57,10 +57,32 @@ async function gh<T>(repo: string, path: string, token?: string): Promise<T> {
   return (await res.json()) as T;
 }
 
+/**
+ * MyCortex es un coach personal, no un panel de ops. Un commit de mantenimiento
+ * ("chore(deps): bump…", "fix(ci): regenera lockfile") no es una señal con peso
+ * ejecutivo: no cambia una decisión ni mueve una meta. Solo mete ruido al corpus
+ * y encarece los embeddings.
+ */
+const OPS_CHURN_COMMIT =
+  /^(ci|build|chore|style|test|revert)(\([^)]*\))?!?:|^(fix|feat)\(ci\)|^merge (branch|pull request)|^bump |\[skip ci\]/i;
+
+export function isOpsChurnCommit(message: string): boolean {
+  return OPS_CHURN_COMMIT.test(message.trim());
+}
+
+export type FetchOptions = {
+  /**
+   * Corridas de workflow de GitHub Actions. Apagado por defecto: son el 71% del
+   * corpus histórico y duplican el reporte de ops que ya llega por correo.
+   */
+  includeCi?: boolean;
+};
+
 export async function fetchGoingSignals(
   repo: string,
   token: string | undefined,
   sinceIso: string,
+  opts: FetchOptions = {},
 ): Promise<Signal[]> {
   const signals: Signal[] = [];
 
@@ -68,6 +90,7 @@ export async function fetchGoingSignals(
     const commits = await gh<GhCommit[]>(repo, `/commits?since=${sinceIso}&per_page=30`, token);
     for (const c of commits) {
       const msg = c.commit?.message ?? '';
+      if (isOpsChurnCommit(msg)) continue;
       signals.push({
         externalId: `commit:${c.sha}`,
         type: 'commit',
@@ -98,22 +121,27 @@ export async function fetchGoingSignals(
     /* sin PRs */
   }
 
-  try {
-    const data = await gh<{ workflow_runs?: GhRun[] }>(repo, `/actions/runs?per_page=25`, token);
-    for (const r of data.workflow_runs ?? []) {
-      const failed = r.conclusion === 'failure' || r.conclusion === 'timed_out';
-      signals.push({
-        externalId: `ci:${r.id}`,
-        type: 'ci',
-        title: `CI ${r.name ?? 'run'}: ${r.conclusion ?? r.status ?? '?'}`,
-        body: `branch ${r.head_branch ?? '?'} — ${r.status ?? ''}/${r.conclusion ?? ''}`,
-        severity: failed ? 'high' : 'low',
-        ts: r.created_at,
-        url: r.html_url,
-      });
+  if (opts.includeCi) {
+    try {
+      const data = await gh<{ workflow_runs?: GhRun[] }>(repo, `/actions/runs?per_page=25`, token);
+      for (const r of data.workflow_runs ?? []) {
+        const failed = r.conclusion === 'failure' || r.conclusion === 'timed_out';
+        // Una corrida verde no es noticia; solo los fallos entran, y como 'low'
+        // (un CI roto se arregla en minutos — "high" se reserva a seguridad).
+        if (!failed) continue;
+        signals.push({
+          externalId: `ci:${r.id}`,
+          type: 'ci',
+          title: `CI ${r.name ?? 'run'}: ${r.conclusion ?? r.status ?? '?'}`,
+          body: `branch ${r.head_branch ?? '?'} — ${r.status ?? ''}/${r.conclusion ?? ''}`,
+          severity: 'low',
+          ts: r.created_at,
+          url: r.html_url,
+        });
+      }
+    } catch {
+      /* sin CI */
     }
-  } catch {
-    /* sin CI */
   }
 
   // Alertas de seguridad — requieren token con permisos; se omiten si dan 403.
