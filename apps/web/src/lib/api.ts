@@ -1072,3 +1072,32 @@ export async function revokeInvitation(
   );
   if (!res.ok) throw new Error(`revoke ${res.status}: ${(await res.text()).slice(0, 200)}`);
 }
+
+export type BacklogThread = {
+  threadId: string;
+  subject: string;
+  from: string;
+  fromName: string;
+  lastDate: string;
+  ageDays: number;
+  messageCount: number;
+  category: 'cliente' | 'proveedor' | 'personal' | 'tramite' | 'otro';
+  reason: string;
+  suggestedReply: string;
+};
+
+export type BacklogReview = {
+  threadsScanned: number;
+  noiseFiltered: number;
+  reviewed: number;
+  backlog: BacklogThread[];
+};
+
+/** Revisa la bandeja: conversaciones humanas sin responder. Cuesta LLM. */
+export async function reviewBacklog(): Promise<BacklogReview> {
+  const res = await fetch(`${API_URL}/backlog/review`, {
+    headers: await authHeaders(),
+  });
+  if (!res.ok) throw new Error(`backlog ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return res.json();
+}

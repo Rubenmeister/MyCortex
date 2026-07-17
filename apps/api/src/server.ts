@@ -12,6 +12,7 @@ import { tasksModule } from './modules/tasks/index.js';
 import { entitiesModule } from './modules/entities/index.js';
 import { contextModule } from './modules/context/index.js';
 import { usageModule } from './modules/usage/index.js';
+import { backlogModule } from './modules/backlog/index.js';
 import { bridgeModule } from './modules/bridge/index.js';
 import { askModule } from './modules/ask/index.js';
 import { workspacesModule } from './modules/workspaces/index.js';
@@ -118,6 +119,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   await server.register(entitiesModule, { prefix: '/entities' });
   await server.register(contextModule, { prefix: '/context' });
   await server.register(usageModule, { prefix: '/usage' });
+  await server.register(backlogModule, { prefix: '/backlog' });
   await server.register(bridgeModule, { prefix: '/bridge' });
   await server.register(askModule, { prefix: '/ask' });
   await server.register(workspacesModule, { prefix: '/workspaces' });

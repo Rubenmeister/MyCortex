@@ -21,6 +21,7 @@ const TABS = [
   { href: '/app/ask', label: 'Preguntar', icon: '💬' },
   { href: '/app/digest', label: 'Briefing', icon: '☀️' },
   { href: '/app/alerts', label: 'Alertas', icon: '🚨' },
+  { href: '/app/backlog', label: 'Pendientes', icon: '📮' },
   { href: '/app/nodes', label: 'Notas', icon: '☰' },
   { href: '/app/settings', label: 'Ajustes', icon: '⚙' },
 ];
